@@ -1,6 +1,6 @@
-# PRD — API Schema Checker & Uplifter
+# PRD — GDS pre-commit API Schema Checker & Uplifter
 
-**Working name:** `gds-uplift`
+**Working name:** `gds-api-schema-uplift`
 **Status:** 2-day build, stakeholder demo at the end
 **Sources of truth** (what the tool checks against and cites in every finding):
 - GDS API Technical & Data Standards — https://www.gov.uk/guidance/gds-api-technical-and-data-standards
@@ -21,7 +21,7 @@ The two-tier split matters: findings must cite a **source of truth** so a develo
 
 ## 1. One-line summary
 
-A pre-push guardrail for developers building GDS-standard APIs: it reads an OpenAPI/Swagger spec, checks it against the GDS + NCSC standards, and — where the spec falls short — an AI agent proposes fixes that the developer approves interactively before anything is written to disk.
+A pre-commit guardrail for developers building GDS-standard APIs: it reads an OpenAPI/Swagger spec, checks it against the GDS + NCSC standards, and — where the spec falls short — an AI agent proposes fixes that the developer approves interactively before anything is written to disk.
 
 ## 2. Problem
 
@@ -47,10 +47,10 @@ So the pitch is not just "pass code review" — it's **standards are the interfa
 
 **Primary user:** a developer inside a UK government department, building an HTTP/REST API that must comply with the GDS API standard.
 
-**Primary use case:** the developer has just finished a piece of work on their API and is about to `git push`. They run:
+**Primary use case:** the developer has just finished a piece of work on their API and is about to `git commit`. They run:
 
 ```
-gds-uplift openapi.yaml
+gds-api-schema-uplift openapi.yaml
 ```
 
 The tool prints a compliance report, walks the developer through each finding with an AI-proposed fix, and applies only the changes the developer approves. Push proceeds with a spec that is closer to standard than it was 30 seconds ago.
@@ -83,7 +83,7 @@ The tool prints a compliance report, walks the developer through each finding wi
 ## 6. Demo narrative (3 minutes)
 
 1. **Set the scene.** "I'm a gov developer. I've just added a new endpoint. Here's my `openapi.yaml`." Show the spec.
-2. **Run the tool.** `gds-uplift openapi.yaml`. Deterministic rules find 3 violations instantly. Claude adds 2 semantic suggestions.
+2. **Run the tool.** `gds-api-schema-uplift openapi.yaml`. Deterministic rules find 3 violations instantly. Claude adds 2 semantic suggestions.
 3. **Walk the loop.** Terminal shows finding #1 with the GDS clause quoted and a proposed diff. Press `y`. Show it applied. Press `n` on one. Press `e` to edit another.
 4. **Show the tail.** Open SigNoz — the run's traces, event log, and LLM cost are all there.
 5. **Land the story.** "This is shift-left for API standards: catch the violation before code review, cite the clause, and prove — with telemetry — that the check actually ran."
@@ -238,7 +238,7 @@ Choices are picked as best-fit for a 2-day build with Claude in the loop — not
 | Choice | Reason |
 |---|---|
 | **Docker** | Reproducible run environment. |
-| **`pyproject.toml`** (installable via `uv tool install .` or `pipx`) | Real CLI install path — `gds-uplift` on the PATH. |
+| **`pyproject.toml`** (installable via `uv tool install .` or `pipx`) | Real CLI install path — `gds-api-schema-uplift` on the PATH. |
 | **`Makefile`** with `make setup / make demo / make test` targets | Single entrypoint for stakeholders. |
 | **Vendored wheels via `uv pip download`** | Demo survives shaky venue Wi-Fi. |
 
@@ -254,7 +254,7 @@ Choices are picked as best-fit for a 2-day build with Claude in the loop — not
 
 | Choice | Reason |
 |---|---|
-| **GitHub Actions template** — runs `gds-uplift --format=github` on PR | Emits findings as GitHub annotations + summary comment. Non-blocking to start. |
+| **GitHub Actions template** — runs `gds-api-schema-uplift --format=github` on PR | Emits findings as GitHub annotations + summary comment. Non-blocking to start. |
 
 ### 9.10 Explicitly not chosen (and why)
 

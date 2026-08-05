@@ -5,11 +5,13 @@ OpenAPI 3.x spec, checks it against the GDS + NCSC standards, and — where the 
 falls short — has a Claude agent propose fixes that you approve interactively before
 anything is written to disk.
 
-**Status: Phase 1 complete.** The five `GDS-*` deterministic rules, the version gate,
-and the findings report all work. Citations do not resolve yet — the standards corpus
-is authored in Phase 2 — and nothing is written to disk until Phase 4. See
-[PLAN.md](PLAN.md) for the phase sequence and [PRD.md](PRD.md) for scope and
-rationale.
+**Status: Phases 0–3 complete.** The deterministic rules, the version gate, the
+standards corpus, the Claude agent, the patch validation gate, and per-run cost
+tracking all work. AI suggestions now quote real GDS/NCSC clause text and prompt
+caching engages. Nothing is written to disk until Phase 4 — there is no approval loop
+yet, so suggestions are displayed but never applied.
+
+See [PLAN.md](PLAN.md) for the phase sequence and [PRD.md](PRD.md) for scope.
 
 ## Quickstart
 
@@ -32,10 +34,29 @@ gds-api-schema-uplift SPEC_PATH [OPTIONS]
                                currently exits with an error rather than falling back.
   --no-llm                     Deterministic pass only; never call the agent.
   --max-llm-calls INTEGER      Cap agent calls per run. [default: 5]
+  --model TEXT                 Anthropic model id. [default: claude-sonnet-4-6]
+  --effort [low|medium|high|max]  Agent reasoning effort. [default: low]
   --standards PATH             Override the standards.yaml path.
 ```
 
 Exit codes: `0` clean, `1` findings present, `3` operational failure.
+
+**The agent pass runs by default and costs money.** Set `GDS_UPLIFT_NO_LLM=1` (or pass
+`--no-llm`) to disable it — in CI, on shared runners, or anywhere a stray
+`ANTHROPIC_API_KEY` could turn a check into a bill. The test suite sets this
+automatically via `tests/conftest.py`, and a second guard makes constructing a real
+client fail loudly inside tests.
+
+Cost for reference, measured on `examples/broken.yaml` with `claude-sonnet-4-6` at
+`--effort low`: the first suggestion costs about **$0.015** (it writes the prompt cache),
+and each subsequent one about **$0.009** (it reads it). A default 5-call run is roughly
+$0.05. The per-run total and cache hit ratio print at the end of every run — a hit ratio
+of zero across a multi-finding run means caching has stopped working and costs ~10x more
+than it should.
+
+Credentials resolve the usual way — `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or an
+`ant auth login` profile. If no client can be built the run degrades to
+deterministic-only with a note rather than failing.
 
 ## What is covered
 
@@ -48,9 +69,18 @@ Exit codes: `0` clean, `1` findings present, `3` operational failure.
 | `GDS-005` | Error responses use RFC 9457 problem details, on standard status codes | warning |
 
 Not yet implemented: `NCSC-001`–`NCSC-004` (Phase 5a) and `REC-001`/`REC-002`
-(Phase 5b). Two parts of the PRD wording are not machine-checkable from an OpenAPI
-document and are deliberately out of scope, documented in the relevant modules:
-GDS-001's "TLS 1.2+" and GDS-004's "UTF-8 encoding".
+(Phase 5b). Their clause text is already in `standards.yaml`, so those phases only add
+checkers.
+
+Two parts of the PRD wording are not machine-checkable from an OpenAPI document and are
+deliberately out of scope, documented in the relevant modules: GDS-001's "TLS 1.2+" and
+GDS-004's "UTF-8 encoding".
+
+**Three rules check more than their clause literally requires**, recorded in
+`standards.yaml` so nobody is told GDS mandates something it does not: `GDS-005` (the
+clause requires consistent documented error codes, not RFC 9457 problem+json),
+`NCSC-004` (the clause requires throttling and never mentions HTTP 429), and `GDS-003`
+(the GDS text is conditional). Their severities are set accordingly.
 
 Version policy (PRD s7.3): OpenAPI 3.1 passes clean, 3.0 passes with an upgrade note,
 Swagger 2.0 is refused with exit code 3 rather than reported as clean.
@@ -67,9 +97,15 @@ scope — lands with Phase 7.
 
 ```
 src/gds_api_schema_uplift/
-  contracts.py                        Finding / Patch / Severity / RuleType / Authority
+  contracts.py                        Finding / Patch / Suggestion / Severity / Authority
   loader.py                           spec load via ruamel round-trip, plus the version gate
   standards.py                        standards.yaml schema, validation, static clause lookup
+  patching.py                         THE VALIDATION GATE: apply to a copy, re-validate, diff
+  cost.py                             per-model pricing, cache-aware token accounting
+  agent/
+    prompts.py                        cached system prompt, corpus rendering
+    tools.py                          retrieve_clause / propose_patch schemas + validation
+    client.py                         tool-use loop, gate integration, call budget
   report.py                           text and JSON renderers
   cli.py                              Typer entrypoint
   rules/

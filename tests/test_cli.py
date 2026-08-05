@@ -114,10 +114,50 @@ def test_text_report_summarises_counts_by_severity():
     assert "4 warning" in result.output
 
 
-def test_report_admits_that_citations_cannot_resolve_yet():
-    """The corpus is empty until Phase 2; the report must not hide that."""
+def test_report_resolves_citations_now_the_corpus_is_authored():
+    """The empty-corpus warning must stop firing once Phase 2 has landed.
+
+    Its absence is the assertion: a report that still warned would mean the shipped
+    corpus is not being loaded.
+    """
     result = runner.invoke(app, [str(BROKEN_SPEC)])
-    assert "standards corpus is empty" in result.output
+    assert "standards corpus is empty" not in result.output
+
+
+def test_no_finding_reports_an_unresolved_citation():
+    """Every registered rule's clause must resolve against the shipped corpus."""
+    result = runner.invoke(app, [str(BROKEN_SPEC)])
+    assert "unresolved" not in result.output
+
+
+def test_findings_render_the_clause_section_not_just_the_id():
+    """A citation is only useful if it names where in the standard it came from.
+
+    Rendered at an explicit width: the section text wraps at a narrow terminal, so
+    asserting against `CliRunner` output would be a layout test, not a content one.
+    """
+    import io
+
+    from rich.console import Console
+
+    from gds_api_schema_uplift.loader import load_spec
+    from gds_api_schema_uplift.report import render_text
+    from gds_api_schema_uplift.rules import run_deterministic_pass
+    from gds_api_schema_uplift.standards import default_standards_path, load_standards
+
+    spec = load_spec(BROKEN_SPEC)
+    buffer = io.StringIO()
+    render_text(
+        spec,
+        run_deterministic_pass(spec),
+        load_standards(default_standards_path()),
+        console=Console(file=buffer, width=200),
+    )
+    output = buffer.getvalue()
+
+    assert "Secure your API" in output
+    assert "Use standard HTTP responses" in output
+    assert "unresolved" not in output
 
 
 # --- json report ----------------------------------------------------------------------

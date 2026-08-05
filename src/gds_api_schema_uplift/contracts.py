@@ -107,3 +107,30 @@ class Patch:
     def to_rfc6902(self) -> list[dict[str, Any]]:
         """Render the op list as an RFC 6902 patch document."""
         return [op.to_rfc6902() for op in self.ops]
+
+
+@dataclass(frozen=True, slots=True)
+class Suggestion:
+    """One finding plus the agent's proposal for it, after the validation gate.
+
+    `offered` is the whole point of this type: a Suggestion that did not survive the
+    gate still exists — it is counted, and its `drop_reason` is reportable — but it
+    is never rendered as a fix. Carrying dropped proposals rather than discarding
+    them is what makes the drop rate observable instead of invisible.
+    """
+
+    finding: Finding
+    patch: Patch | None = None
+    offered: bool = False
+    drop_reason: str | None = None
+    stage: str | None = None
+    diff: str | None = None
+
+    @property
+    def has_citation(self) -> bool:
+        """True when the proposal carries a non-empty clause quote.
+
+        M2 requires every offered suggestion to cite a clause, so an offered
+        proposal without one is a defect rather than a style preference.
+        """
+        return bool(self.patch and self.patch.clause_quote.strip())

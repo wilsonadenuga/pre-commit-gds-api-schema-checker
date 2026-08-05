@@ -97,10 +97,18 @@ the round-trip test is green.
 
 **Covers:** req 4, req 15 (input to the coverage table)
 
-**Exit criterion:** all 11 v0.2 `clause_id` entries resolve to non-empty `text` and a
-`gov.uk`/`ncsc.gov.uk` URL, and every rule *currently in the registry* maps to one
-that resolves; the findings report shows a clause quote and URL for every
-deterministic finding.
+**Exit criterion:** all 11 v0.2 `clause_id` entries resolve to substantive `text`; every
+`authority: standard` clause cites a `gov.uk`/`ncsc.gov.uk` URL; every
+`authority: recommendation` clause cites something *other* than a source of truth; and
+every rule *currently in the registry* maps to a clause that resolves. The findings
+report shows a clause section and URL for every deterministic finding.
+
+An earlier version of this criterion required all 11 clauses to cite gov.uk or
+ncsc.gov.uk. That was unmeetable, and wrong in substance: `REC-001`/`REC-002` are
+conventions with no GDS or NCSC anchor, so pointing them at gov.uk would assert a
+government mandate that does not exist. `standards.is_source_of_truth` exists to keep
+the two classes apart, and `tests/test_citation_integrity.py` asserts the separation in
+both directions.
 
 The registry only holds the 5 `GDS-*` rules at this point, so the registry-walk
 assertion cannot cover all 11 rules until Phase 5b closes. The corpus-side assertion
@@ -396,11 +404,15 @@ Unresolved inputs that affect this plan. None block Phase 0.
    number is being graded, set it before Phase 7.
 6. **PRD s10/s11 remain stale** against the v0.2 ruleset (`CLAUDE.md` divergence
    note 5). This plan supersedes PRD s10 as the build sequence.
-7. **Model IDs inherited from PRD s9.4 are unverified.** The PRD names "Claude Sonnet
-   4.6" (`claude-sonnet-4-6`) as primary, "Claude Haiku 4.5"
-   (`claude-haiku-4-5-20251001`) for triage, and "Opus 4.7" in s9.10's
-   not-chosen list. The current generation is the Claude 5 family, so at least the
-   Sonnet and Opus references look stale. Confirm the exact IDs against the current
-   model list at the start of Phase 3 — an invalid ID blocks that phase outright.
-   This is inherited from the PRD rather than a defect in this plan, but it lands
-   here first.
+7. ~~**Model IDs inherited from PRD s9.4 are unverified.**~~ **Resolved in Phase 3 —
+   the PRD's IDs are correct.** `claude-sonnet-4-6` and `claude-haiku-4-5` are both
+   current and active, and `claude-opus-4-7` in s9.10's not-chosen list is real too.
+   An earlier version of this item claimed they looked stale because a newer
+   generation exists (Opus 5, Sonnet 5); that was wrong — newer is not the same as
+   superseded. `claude-sonnet-4-6` is the shipped default and a live call against it
+   succeeded. The dated spelling `claude-haiku-4-5-20251001` also resolves, though
+   the bare alias is preferred.
+
+   One genuine constraint did surface: **strict tool use is not available across
+   every model this CLI can target**, so the `propose_patch` schema is advisory and
+   `agent/tools.py` validates tool input itself rather than trusting it.

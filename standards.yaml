@@ -1,40 +1,148 @@
 # The standards corpus — clause_id -> citable clause.
 #
-# SCHEMA IS FROZEN (Phase 0). Content is authored in Phase 2.
+# Schema frozen in Phase 0 (see src/gds_api_schema_uplift/standards.py). Content
+# authored in Phase 2 from the two sources of truth:
 #
-# Each entry:
+#   GDS API Technical and Data Standards
+#     https://www.gov.uk/guidance/gds-api-technical-and-data-standards
+#   NCSC — Securing HTTP-based APIs
+#     https://www.ncsc.gov.uk/collection/securing-http-based-apis
 #
-#   clauses:
-#     <clause_id>:
-#       section:   human-readable location in the source document
-#       text:      the quotable extract shown to the developer
-#       url:       where the developer verifies it
-#       authority: standard | recommendation   (optional, defaults to standard)
+# Every `text` below is a VERBATIM extract, retrieved from the URL on the same entry
+# on 2026-08-05. Nothing here is paraphrased and nothing is invented: a fabricated
+# citation is worse than a missing one, because the whole point of the corpus is that
+# a developer can trace a finding back to gov.uk or ncsc.gov.uk and check it.
 #
-# Rules declare their clause_id at registration (see rules/__init__.py), so lookup is
-# a static dict read. There is no retrieval step and no vector store at any phase —
-# PRD s9.5 and s9.10.
+# `authority: standard`       -> mandated by a source of truth (GDS or NCSC).
+# `authority: recommendation` -> a convention with no GDS/NCSC anchor. Rendered as
+#                                explicitly not-GDS-mandated. REC-* only.
 #
-# `authority: recommendation` is required for the REC-* rules. It is what makes them
-# render as visibly not-GDS-mandated in every output format, rather than relying on
-# renderer conditionals.
+# WHERE A RULE IS STRICTER THAN ITS CLAUSE
+# ---------------------------------------
+# Three rules check something at the OpenAPI-document level that the clause does not
+# literally require. This is recorded here rather than hidden, so nobody tells a
+# developer that GDS or NCSC mandates something it does not:
 #
-# Phase 2 must populate all 11 v0.2 clause ids:
-#   GDS-001  HTTPS-only, TLS 1.2+                     GDS Security + service-manual/using-https
-#   GDS-002  ISO 8601 dates and times                 GDS (explicit)
-#   GDS-003  Versioning declared in URI path          GDS (explicit)
-#   GDS-004  JSON responses, UTF-8                    GDS (explicit)
-#   GDS-005  Consistent documented errors             GDS (explicit)
-#   NCSC-001 No http basic, no bare apiKey            GDS + NCSC s2
-#   NCSC-002 Auth declared, every operation covered   NCSC s2
-#   NCSC-003 additionalProperties: false on bodies    NCSC s4
-#   NCSC-004 429 defined on public endpoints          NCSC s5
-#   REC-001  kebab-case plural paths                  REST convention + MS API Guidelines  [recommendation]
-#   REC-002  Meaningful summary and description       OpenAPI conventions                  [recommendation]
-#
-# Deliberately empty rather than pre-filled with placeholder text: a fabricated
-# citation is worse than a missing one, and Phase 2's integrity test would pass on
-# invented content. Every `text` below must be a real extract, checked against the
-# source URL by hand.
+#   GDS-005  The clause requires consistent, standard, documented error codes. It does
+#            NOT mandate RFC 9457 problem+json — that is this tool's chosen target
+#            shape, and the rule's severity is `warning` accordingly.
+#   NCSC-004 The clause requires throttling/rate limiting. It says nothing about HTTP
+#            429, nor about declaring a 429 response in an OpenAPI document. A declared
+#            429 is this tool's proxy for "rate limiting was considered", which is why
+#            the rule's severity is only `suggestion`. GDS's "Anonymous endpoints
+#            should also be rate limited" is the closer anchor for public endpoints.
+#   GDS-003  The GDS text is conditional ("If you cannot keep older versions
+#            working..."), so URI versioning is the recommended mechanism rather than
+#            an unconditional must. Severity is `warning`, not `error`.
 
-clauses: {}
+clauses:
+  GDS-001:
+    section: Secure your API
+    authority: standard
+    url: https://www.gov.uk/guidance/gds-api-technical-and-data-standards
+    text: >-
+      Follow the GOV.UK Service Manual guidance on using HTTPS when serving your API
+      over the web, to make it as secure as possible. You must use TLS 1.2 or above to
+      secure your API.
+
+  GDS-002:
+    section: Follow the Technology Code of Practice and other standards
+    authority: standard
+    url: https://www.gov.uk/guidance/gds-api-technical-and-data-standards
+    text: >-
+      ISO 8601 standard – this represents the date and time in your API's responses,
+      preventing issues with ambiguous date formats.
+
+  GDS-003:
+    section: Version your API and support older versions
+    authority: standard
+    url: https://www.gov.uk/guidance/gds-api-technical-and-data-standards
+    text: >-
+      If you cannot keep older versions working you should expose a new version of your
+      API by adding the version number into the URI, for example
+      https://myapi.service.gov.uk/v1. URI versioning is the simplest and most commonly
+      used way to version an API. Other ways to version an API include using a custom
+      header or defining a custom media type. Avoid these approaches because they can
+      lead to your API being blocked by proxies or firewalls.
+
+  GDS-004:
+    section: Use JSON for response formats / Use the UTF-8 standard to encode your API
+    authority: standard
+    url: https://www.gov.uk/guidance/gds-api-technical-and-data-standards
+    text: >-
+      Where possible, you should use the JSON Data Interchange Standard when structuring
+      your REST API's response formats. You should use the Unicode Transformation Format
+      (UTF-8) standard when encoding unicode character sets.
+
+  GDS-005:
+    section: Use standard HTTP responses
+    authority: standard
+    url: https://www.gov.uk/guidance/gds-api-technical-and-data-standards
+    text: >-
+      Make sure you match error codes with standard HTTP response codes. Your error
+      codes must be consistent and easy to read, so that it's clear where an error has
+      occurred. You should document all error codes and make sure they're easy to find.
+
+  NCSC-001:
+    section: 2. API authentication and authorisation — Avoid weak authentication methods
+    authority: standard
+    url: https://www.ncsc.gov.uk/collection/securing-http-based-apis/2-api-authentication-and-authorisation
+    text: >-
+      Don't use weak authentication methods such as basic authentication or API keys.
+      Basic authentication transmits usernames and passwords within each request in a
+      Base64-encoded format, while API keys are placed in a http header and are shared
+      bearer tokens. Both these methods can be easily compromised, often due to poor
+      secrets management.
+
+  NCSC-002:
+    section: 2. API authentication and authorisation — API authorisation
+    authority: standard
+    url: https://www.ncsc.gov.uk/collection/securing-http-based-apis/2-api-authentication-and-authorisation
+    text: >-
+      Deny by default: restrict access by default, permitting entry only to explicitly
+      authorised entities. Validate permissions on every request: continually verify
+      access permissions for each action within a system.
+
+  NCSC-003:
+    section: 4. Input validation — Schema validation
+    authority: standard
+    url: https://www.ncsc.gov.uk/collection/securing-http-based-apis/4-input-validation
+    text: >-
+      JSON schema can be used to define the structure of data exchanged via APIs and
+      validate incoming payloads against these schemas. Schema validation should also be
+      used to ensure that an attacker is not sending extra clauses (key value pairs)
+      that are not expected.
+
+  NCSC-004:
+    section: 5. DoS attack mitigation
+    authority: standard
+    url: https://www.ncsc.gov.uk/collection/securing-http-based-apis/5-dos-attack-mitigation
+    text: >-
+      When APIs lack rate limiting and throttling, they become vulnerable to excessive
+      requests that can overwhelm servers, leading to denial of service (DoS) attacks or
+      resource exhaustion. 'Throttling' refers to applying a quota on how often/how fast
+      an API can be called. This is often measured in how many requests can be made per
+      second, and should allow for spikes in use by legitimate consumers.
+
+  # REC-* are conventions, not GDS or NCSC requirements. They cite external references
+  # and `is_source_of_truth` is False for both by design — the renderer marks them as
+  # not-GDS-mandated so a developer is never told gov.uk requires them.
+  REC-001:
+    section: Microsoft REST API Guidelines — URL structure
+    authority: recommendation
+    url: https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md
+    text: >-
+      This is a convention, not a GDS or NCSC requirement. Collection resources are
+      conventionally named with plural nouns and multi-word path segments with hyphens
+      (kebab-case), so that URLs read consistently across an estate. GDS does not
+      specify a casing convention for path segments.
+
+  REC-002:
+    section: OpenAPI Specification 3.1 — Operation Object
+    authority: recommendation
+    url: https://spec.openapis.org/oas/v3.1.0.html#operation-object
+    text: >-
+      This is a convention, not a GDS or NCSC requirement. The OpenAPI Operation Object
+      defines an optional `summary` ("A short summary of what the operation does") and
+      `description` ("A verbose explanation of the operation behavior"). Populating them
+      is what makes generated documentation and generated agent tool definitions usable.

@@ -74,11 +74,13 @@ def test_empty_corpus_is_valid():
 
 
 def test_shipped_corpus_loads():
+    """The shipped corpus parses against the frozen schema.
+
+    Its *contents* are asserted in `tests/test_citation_integrity.py`; this only
+    proves the file on disk is well-formed, which is this module's remit.
+    """
     standards = load_standards(default_standards_path())
-    assert len(standards) == 0, (
-        "standards.yaml is expected to be empty until Phase 2; update this test "
-        "when the corpus is authored."
-    )
+    assert len(standards) > 0
 
 
 @pytest.mark.parametrize(

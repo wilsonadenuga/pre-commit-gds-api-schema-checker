@@ -217,6 +217,108 @@ greppable without putting an expiring label in a filename.
 filling (a vacuous-pass guard on the compliant fixture, JSON-stdout-stays-valid,
 rule_type consistency, two more odd-spec shapes).
 
+**9. "implment phase 3 use multi agent when neccessary" (interrupted, then resumed)**
+
+Phase 3 built: `patching.py` (validation gate), `cost.py` (pricing + cache-aware token
+accounting), `agent/{prompts,tools,client}.py` (cached system prompt, two tool schemas,
+tool-use loop, call budget), plus CLI and report wiring. 417 tests pass in 3.2s,
+offline.
+
+Verified against a **single live API call**, not just stubs: a valid RFC 6902 patch,
+verbatim clause quote, one-line diff with the developer's comments intact, spec
+unmutated. Cost $0.0107 (1166 uncached input + 1180 cache-write + 182 output tokens).
+Cache-write was non-zero, so the caching path engages once the corpus is non-trivial.
+
+**Two subagents used** (`patching.py`, `cost.py`) — both API-independent and
+well-specifiable. I kept `agent/` myself because it needed the current Anthropic API
+reference loaded via the `claude-api` skill, which subagents don't inherit.
+
+**A real mistake worth recording: the test suite made billable API calls.** The agent
+runs by default, `ANTHROPIC_API_KEY` was set, and CLI tests invoke the tool on
+`broken.yaml` — so a full run took 192s instead of 2s and spent real tokens. Fixed with
+a `GDS_UPLIFT_NO_LLM` kill switch plus two autouse fixtures in `tests/conftest.py`
+(force the switch on; make constructing a real client raise). The lesson generalises:
+**a feature that costs money must be off by default in tests before it is wired on by
+default in the product.**
+
+**A subagent claim that did not survive checking.** The `patching.py` agent reported
+that `copy.deepcopy` on a ruamel `CommentedMap` silently drops six comments from
+`examples/broken.yaml`, and justified its dump-and-reparse copy on that basis. Not
+reproducible — deepcopy is byte-identical on both fixtures under substring and strict
+full-text diff. The implementation is still sound (single serialisation path) and its
+test asserts the right property (comments survive in output), but the docstring
+asserted a false fact and has been corrected. Taking that at face value would have
+propagated a fabricated ruamel bug into the codebase's reasoning.
+
+**Resolved PLAN open item 3** (the `retrieve_clause` ambiguity): the anchoring clause is
+passed directly in the user message for every rule; the tool remains as a deterministic
+lookup for `REC-*` rules, which have no single pre-declared anchor.
+
+**Corrected PLAN open item 7, which I had got wrong.** `claude-sonnet-4-6` and
+`claude-haiku-4-5` are both current and active — I had flagged them as probably stale
+purely because a newer generation exists. Newer is not superseded. One genuine
+constraint did surface: strict tool use is not available across every targetable model,
+so `agent/tools.py` validates `propose_patch` input itself rather than relying on the
+schema.
+
+**Phase 2 is still not done, and it was mislabelled.** Commit `e1e6042` says "implment
+phase2" but contains Phase 1's work. `standards.yaml` remains `clauses: {}`, so
+suggestions cannot cite a clause and the system prompt stays under the 1024-token
+minimum cacheable prefix — `cache_control` is accepted and silently ignored.
+`prompts.cache_warning` surfaces this rather than letting it pass unnoticed.
+
+**10. "implment phase 2" — the standards corpus**
+
+`standards.yaml` populated with all 11 v0.2 clauses, every `text` a **verbatim extract
+retrieved from the source URL on 2026-08-05**, not paraphrased and not invented. Sources:
+the GDS API Technical and Data Standards page, and NCSC "Securing HTTP-based APIs"
+sections 2 (authentication/authorisation), 4 (input validation) and 5 (DoS mitigation).
+The NCSC collection landing page carries only the threat-model introduction — the
+clause text lives on numbered sub-pages that had to be located separately.
+
+469 tests pass. Added `tests/test_citation_integrity.py` (50 tests) as Phase 2's exit
+criterion, asserting the separation in **both** directions: `authority: standard` clauses
+must cite gov.uk/ncsc.gov.uk, and `authority: recommendation` clauses must **not** — a
+`REC-*` clause pointing at gov.uk would assert a government mandate that does not exist.
+
+**Three rules are stricter than their clause, and this is now recorded rather than
+hidden.** Reading the real source text made the gaps visible:
+
+- `GDS-005` — GDS requires "error codes must be consistent and easy to read" and
+  documented, and to "match error codes with standard HTTP response codes". It does
+  **not** mandate RFC 9457 problem+json; that is this tool's chosen target shape.
+- `NCSC-004` — NCSC §5 requires throttling and **never mentions HTTP 429**, let alone
+  declaring a 429 response in an OpenAPI document. The rule is a proxy for "rate
+  limiting was considered", which is why its severity is only `suggestion`. GDS's
+  "Anonymous endpoints should also be rate limited" is the closer anchor.
+- `GDS-003` — the GDS versioning text is conditional ("If you cannot keep older
+  versions working..."), so URI versioning is recommended rather than an unconditional
+  must. Severity `warning`, not `error`.
+
+**Corpus text sometimes beat the PRD's paraphrase.** `NCSC-001`'s basis turns out to be
+stated in the *GDS* document too ("Never use basic authentication…", "You should also
+avoid using API keys"), and `NCSC-003`'s anchor is unusually precise: "Schema validation
+should also be used to ensure that an attacker is not sending extra clauses (key value
+pairs) that are not expected" — an exact justification for
+`additionalProperties: false`.
+
+**Fixed an unmeetable exit criterion in PLAN.md.** Phase 2's criterion demanded all 11
+clauses cite gov.uk/ncsc.gov.uk, which contradicts the same phase's own treatment of
+`REC-*` as externally-cited conventions. `standards.is_source_of_truth` was built for
+exactly that distinction; the criterion now matches it.
+
+**Phase 2 unblocked Phase 3's caching, verified live.** The system prompt now estimates
+1602 tokens, above the 1024 minimum cacheable prefix. A two-call run showed call 1
+writing 2304 cache tokens and call 2 reading them back: $0.0147 then $0.0089, a 66%
+hit ratio on the second call. Both suggestions quoted real GDS text verbatim
+("You must use TLS 1.2 or above to secure your API."). Spec unmutated.
+
+Two tests that pinned the empty corpus were updated rather than deleted — both carried
+"update this when the corpus is authored" notes, which is why they were easy to find.
+One of my replacements asserted section text against `CliRunner` output and failed on
+Rich's 80-column wrapping; rewritten to render at an explicit width, since otherwise it
+was a layout test masquerading as a content test.
+
 ### Findings / open items
 
 - **PRD inconsistency (not yet fixed).** Goal #4 (`PRD.md:65`) and M4 (`PRD.md:80`)

@@ -7,17 +7,24 @@ the middle without changing this shape.
 
 from __future__ import annotations
 
+import os
 from enum import Enum
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from rich.console import Console
 
+from .agent.client import DEFAULT_MODEL
+from .agent.prompts import build_system_blocks, cache_warning
+from .contracts import Suggestion
 from .loader import SpecLoadError, SpecVersionRejected, load_spec, version_gate
 from .report import render_json, render_text
 from .rules import run_deterministic_pass
 from .standards import StandardsError, default_standards_path, load_standards
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle avoidance for type hints only
+    from .agent import AgentRun
 
 app = typer.Typer(
     add_completion=False,
@@ -32,11 +39,37 @@ class OutputFormat(str, Enum):
     GITHUB = "github"
 
 
+class Effort(str, Enum):
+    """Agent reasoning effort. Defaults low — a patch proposal is a scoped task, and
+    demo latency is a stated risk (PRD s11)."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    MAX = "max"
+
+
 # Exit codes. 0/1 are the useful distinction for a pre-commit hook; 2 is Typer's
 # own usage-error code, so operational failures use 3 to stay out of its way.
 EXIT_OK = 0
 EXIT_FINDINGS = 1
 EXIT_ERROR = 3
+
+#: Environment kill switch for the agent pass, equivalent to `--no-llm`.
+#:
+#: Exists because the agent runs by default: a test suite, a CI job, or a pre-commit
+#: hook on a shared runner would otherwise spend real tokens the moment a credential
+#: happens to be present in the environment. `tests/conftest.py` sets this for the
+#: whole suite, so no test can reach the network by accident.
+NO_LLM_ENV = "GDS_UPLIFT_NO_LLM"
+
+
+def _llm_disabled(no_llm_flag: bool) -> bool:
+    """True when the agent pass must not run."""
+    if no_llm_flag:
+        return True
+    value = os.environ.get(NO_LLM_ENV, "").strip().lower()
+    return value not in ("", "0", "false", "no")
 
 
 @app.command()
@@ -69,6 +102,14 @@ def check(
         Path | None,
         typer.Option("--standards", help="Override the standards.yaml path."),
     ] = None,
+    model: Annotated[
+        str,
+        typer.Option("--model", help="Anthropic model id for the agent pass."),
+    ] = DEFAULT_MODEL,
+    effort: Annotated[
+        Effort,
+        typer.Option("--effort", help="Agent reasoning effort. Higher costs more."),
+    ] = Effort.LOW,
 ) -> None:
     """Run the compliance check and print a report.
 
@@ -109,24 +150,88 @@ def check(
 
     findings = run_deterministic_pass(spec)
 
-    # The agent path lands in Phase 3. Flags are accepted now so the interface is
-    # stable, but say plainly that they currently do nothing rather than implying
-    # an LLM pass ran.
-    if not no_llm and max_llm_calls > 0:
-        from .rules import llm_rules
-
-        if llm_rules():
-            err.print(
-                "[yellow]Note:[/yellow] LLM-type rules are registered but the agent "
-                "is not wired up until Phase 3; their findings are not produced."
-            )
+    suggestions: list[Suggestion] = []
+    agent_run: AgentRun | None = None
+    if findings and not _llm_disabled(no_llm) and max_llm_calls > 0:
+        agent_run, suggestions = _run_agent(
+            spec=spec,
+            findings=findings,
+            standards=standards,
+            model=model,
+            effort=effort.value,
+            max_llm_calls=max_llm_calls,
+            # Advisory notes go to stderr, but keep the agent quiet under
+            # --format=json so stdout stays parseable for a CI consumer.
+            err=Console(stderr=True, quiet=output_format is OutputFormat.JSON),
+        )
 
     if output_format is OutputFormat.JSON:
-        console.print_json(render_json(spec, findings, standards))
+        console.print_json(render_json(spec, findings, standards, suggestions))
     else:
-        render_text(spec, findings, standards, console=console)
+        render_text(spec, findings, standards, suggestions, console=console)
+        if agent_run is not None:
+            agent_run.cost.render(console)
 
     raise typer.Exit(EXIT_FINDINGS if findings else EXIT_OK)
+
+
+def _run_agent(
+    *,
+    spec,
+    findings,
+    standards,
+    model: str,
+    effort: str,
+    max_llm_calls: int,
+    err: Console,
+) -> tuple[AgentRun | None, list[Suggestion]]:
+    """Run the agent pass, degrading to no suggestions rather than failing the run.
+
+    A compliance report that lists deterministic findings is useful on its own. An
+    unreachable API, a missing key, or an unpriced model must therefore downgrade the
+    run to deterministic-only with a clear note — never turn a working check into a
+    non-zero exit.
+    """
+    from .agent import AgentConfig, AgentRun, build_messages_api, propose_for_findings
+
+    config = AgentConfig(model=model, effort=effort, max_llm_calls=max_llm_calls)
+    run = AgentRun(config=config)
+
+    warning = cache_warning(build_system_blocks(standards))
+    if warning:
+        err.print(f"[yellow]Note:[/yellow] {warning}")
+
+    try:
+        messages_api = build_messages_api()
+    except Exception as exc:  # noqa: BLE001 - SDK raises a family of auth/config errors
+        err.print(
+            f"[yellow]Skipping the AI pass:[/yellow] could not construct the "
+            f"Anthropic client ({type(exc).__name__}: {exc}). Deterministic findings "
+            f"are unaffected."
+        )
+        return None, []
+
+    try:
+        suggestions = propose_for_findings(
+            messages_api,
+            spec=spec,
+            findings=findings,
+            standards=standards,
+            run=run,
+        )
+    except Exception as exc:  # noqa: BLE001 - network/API errors must not fail the run
+        err.print(
+            f"[yellow]AI pass failed:[/yellow] {type(exc).__name__}: {exc}. "
+            f"Deterministic findings are unaffected."
+        )
+        return run, []
+
+    if run.patches_dropped:
+        err.print(
+            f"[yellow]Note:[/yellow] {run.patches_dropped} proposed patch(es) were "
+            f"dropped before display — they failed validation or were malformed."
+        )
+    return run, suggestions
 
 
 if __name__ == "__main__":  # pragma: no cover

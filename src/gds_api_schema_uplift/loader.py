@@ -45,6 +45,16 @@ def _round_trip_yaml() -> YAML:
     return yaml
 
 
+def round_trip_yaml() -> YAML:
+    """The one YAML configuration used for both reading and writing specs.
+
+    Public because every module that copies, patches, or writes a spec must use the
+    identical configuration — a second config is how comment- and order-preserving
+    writes silently stop preserving things.
+    """
+    return _round_trip_yaml()
+
+
 @dataclass(slots=True)
 class LoadedSpec:
     """A parsed spec plus what we need to write it back unchanged.

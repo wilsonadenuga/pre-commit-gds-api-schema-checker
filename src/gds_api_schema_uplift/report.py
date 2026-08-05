@@ -11,9 +11,10 @@ import json
 from collections.abc import Sequence
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
-from .contracts import Authority, Finding, Severity
+from .contracts import Authority, Finding, Severity, Suggestion
 from .loader import LoadedSpec
 from .standards import Standards, StandardsError
 
@@ -42,10 +43,56 @@ def _clause_cell(finding: Finding, standards: Standards | None) -> str:
     return label
 
 
+def render_suggestions(
+    suggestions: Sequence[Suggestion],
+    console: Console,
+) -> None:
+    """Render agent proposals that survived the validation gate.
+
+    Dropped proposals are summarised by count and reason rather than shown as fixes.
+    A patch that failed validation is not a suggestion — offering it would put an
+    invalid spec one keystroke away.
+    """
+    if not suggestions:
+        return
+
+    offered = [s for s in suggestions if s.offered]
+    dropped = [s for s in suggestions if not s.offered]
+
+    for suggestion in offered:
+        patch = suggestion.patch
+        assert patch is not None  # offered implies a patch
+        body = [f"[bold]{suggestion.finding.rule_id}[/bold]  {suggestion.finding.location}"]
+        if patch.clause_quote:
+            body.append(f'\n[dim]clause:[/dim] "{patch.clause_quote}"')
+        else:
+            body.append("\n[red]clause: (none — suggestion is uncited)[/red]")
+        body.append(f"\n[dim]why:[/dim] {patch.rationale}")
+        if suggestion.diff:
+            body.append(f"\n\n{suggestion.diff}")
+        console.print(Panel("".join(body), title="AI suggestion", border_style="cyan"))
+
+    uncited = [s for s in offered if not s.has_citation]
+    if uncited:
+        console.print(
+            f"[red]{len(uncited)} suggestion(s) carry no clause citation[/red] — "
+            f"this breaks the citation requirement and is a bug, not a style issue."
+        )
+
+    if dropped:
+        console.print(
+            f"[dim]{len(dropped)} proposal(s) dropped before display:[/dim] "
+            + ", ".join(
+                f"{s.finding.rule_id} ({s.stage or 'unknown'})" for s in dropped
+            )
+        )
+
+
 def render_text(
     spec: LoadedSpec,
     findings: Sequence[Finding],
     standards: Standards | None = None,
+    suggestions: Sequence[Suggestion] = (),
     console: Console | None = None,
 ) -> None:
     """Print the human-facing report."""
@@ -82,6 +129,7 @@ def render_text(
         f"{counts[Severity.SUGGESTION]} suggestion"
     )
     _print_ruleset_note(console, standards)
+    render_suggestions(suggestions, console)
 
 
 def _print_ruleset_note(console: Console, standards: Standards | None) -> None:
@@ -109,6 +157,7 @@ def render_json(
     spec: LoadedSpec,
     findings: Sequence[Finding],
     standards: Standards | None = None,
+    suggestions: Sequence[Suggestion] = (),
 ) -> str:
     """Serialise the report for machine consumption and for golden files."""
     payload = {
@@ -116,6 +165,19 @@ def render_json(
         "openapi_version": spec.openapi_version,
         "swagger_version": spec.swagger_version,
         "rules_run": _rules_run(),
+        "suggestions": [
+            {
+                "rule_id": s.finding.rule_id,
+                "offered": s.offered,
+                "stage": s.stage,
+                "drop_reason": s.drop_reason,
+                "has_citation": s.has_citation,
+                "clause_quote": s.patch.clause_quote if s.patch else None,
+                "rationale": s.patch.rationale if s.patch else None,
+                "ops": s.patch.to_rfc6902() if s.patch else None,
+            }
+            for s in suggestions
+        ],
         "findings": [
             {
                 "rule_id": f.rule_id,

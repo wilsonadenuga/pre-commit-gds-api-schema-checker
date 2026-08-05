@@ -5,6 +5,8 @@
 **Sources of truth** (what the tool checks against and cites in every finding):
 - GDS API Technical & Data Standards — https://www.gov.uk/guidance/gds-api-technical-and-data-standards
 - NCSC — Securing HTTP-based APIs — https://www.ncsc.gov.uk/collection/securing-http-based-apis
+
+**Test-fixture inventory** (a directory of real UK gov APIs — not a standard, but the source of real-world OpenAPI specs we validate the tool against):
 - GOV.UK API catalogue — https://www.api.gov.uk/#uk-public-sector-apis
 
 **Additional references** (inform judgement and rule construction; not the source of citations shown to the developer):
@@ -15,7 +17,7 @@
 - OWASP REST Security Cheat Sheet
 - Microsoft REST API Guidelines
 
-The two-tier split matters: findings must cite a **source of truth** so a developer can trace "why must I fix this?" back to gov.uk or ncsc.gov.uk. The additional references shape *how* we write the rule and *how* the AI proposes the fix — they're not what we point the developer at.
+The three-tier split matters: findings must cite a **source of truth** so a developer can trace "why must I fix this?" back to gov.uk or ncsc.gov.uk. The additional references shape *how* we write the rule and *how* the AI proposes the fix. The fixture inventory is where we find real gov API specs to test against.
 
 ---
 
@@ -69,7 +71,7 @@ The tool prints a compliance report, walks the developer through each finding wi
 - Fixing the source code that *generates* the spec (annotations in Spring/FastAPI/etc.)
 - Multi-tenant SaaS, hosted dashboard, or billing
 - IDE extension
-- Full coverage of the GDS standard — the MVP encodes ~5-8 rules only
+- Full coverage of the GDS standard — the MVP encodes ~9 hard rules + 2 recommendations
 - Blocking git hooks (only informational output; blocking is a policy decision for later)
 
 ## 5. Success metrics
@@ -93,30 +95,32 @@ The tool prints a compliance report, walks the developer through each finding wi
 ### 7.1 What the tool does
 
 1. Accepts an OpenAPI 3.x YAML or JSON spec on the CLI.
-2. Runs a **deterministic rule pass** against ~5-8 hand-picked GDS rules.
+2. Runs a **deterministic rule pass** against ~9 hard rules + 2 recommendations.
 3. For findings flagged as "needs judgement," calls a **Claude agent** that:
-   - retrieves the relevant GDS/NCSC clause from a vector index (RAG),
+   - looks up the rule's pre-declared citation (from a static `standards.yaml`),
    - proposes a concrete patch to the spec,
    - explains *why*, quoting the clause.
 4. Presents each finding to the developer as an interactive prompt: `[y]es apply / [n]o skip / [e]dit / [w]hy / [q]uit`.
 5. Writes approved patches back to the spec file (with a `.bak` backup).
 6. Emits telemetry throughout, and prints a per-run LLM cost summary at the end.
 
-### 7.2 Initial ruleset (v0.1)
+### 7.2 Initial ruleset (v0.2)
 
-Distilled by hand from the GDS + NCSC standards. Each rule has (id, severity, source citation, deterministic-or-LLM).
+Every hard rule cites a specific GDS or NCSC clause (verified against the source text). Two conventions with no source-of-truth anchor — kebab-case paths and meaningful operation summaries — are kept but demoted to `REC-` recommendations, cited to external references.
 
-| ID | Rule | Severity | Type |
-|---|---|---|---|
-| GDS-001 | Paths use kebab-case, plural nouns | error | deterministic |
-| GDS-002 | HTTPS-only (no `http://` servers) | error | deterministic |
-| GDS-003 | Standard HTTP verbs only; no verbs-in-paths (`/getUser`) | error | deterministic |
-| GDS-004 | Every response defines a schema (no bare `200: OK`) | warning | deterministic |
-| GDS-005 | Errors follow a consistent envelope (RFC 9457 problem+json / GDS shape) | warning | deterministic |
-| GDS-006 | Dates and times are ISO 8601 strings | warning | deterministic |
-| GDS-007 | Every operation has a meaningful `summary` and `description` | suggestion | LLM (judgement) |
-| GDS-008 | Resource and field names are semantically clear | suggestion | LLM (judgement) |
-| NCSC-001 | Auth scheme declared; no endpoints publicly unauthenticated by accident | warning | deterministic |
+| ID | Rule | Severity | Anchor | Type |
+|---|---|---|---|---|
+| GDS-001 | HTTPS-only, TLS 1.2+ | error | GDS Security + service-manual/using-https | deterministic |
+| GDS-002 | Dates and times are ISO 8601 strings | warning | GDS (explicit) | deterministic |
+| GDS-003 | Versioning declared in URI path (e.g. `/v1/...`) | warning | GDS (explicit) | deterministic |
+| GDS-004 | JSON responses, UTF-8 encoding | warning | GDS (explicit) | deterministic |
+| GDS-005 | Errors consistent, mapped to standard HTTP codes, documented (problem+json recommended) | warning | GDS (explicit) | deterministic |
+| NCSC-001 | No `http basic` and no bare `apiKey` auth schemes | error | GDS + NCSC §2 | deterministic |
+| NCSC-002 | Auth scheme declared; every operation covered ("deny by default") | error | NCSC §2 | deterministic |
+| NCSC-003 | Request bodies set `additionalProperties: false` | warning | NCSC §4 | deterministic |
+| NCSC-004 | Rate limiting acknowledged — `429` response defined on public endpoints | suggestion | NCSC §5 | deterministic |
+| REC-001 | Paths use kebab-case, plural nouns *(recommendation — not in GDS)* | suggestion | REST convention + MS API Guidelines | LLM |
+| REC-002 | Every operation has a meaningful `summary` and `description` *(recommendation)* | suggestion | OpenAPI conventions | LLM |
 
 ### 7.3 Compatibility notes
 
@@ -135,8 +139,9 @@ Distilled by hand from the GDS + NCSC standards. Each rule has (id, severity, so
 ## 8. Architecture
 
 ```
-                            +--------------------------+
-   openapi.yaml -----------> |  CLI (Python + Typer)   |
+   openapi.yaml ------+
+   standards.yaml ----+---> +--------------------------+
+                            |  CLI (Python + Typer)    |
                             |                          |
                             |  1. Parse spec           |
                             |  2. Deterministic rules  |---> findings[]
@@ -151,24 +156,19 @@ Distilled by hand from the GDS + NCSC standards. Each rule has (id, severity, so
 +---------------+          +-------------------+         +-----------------+
 | Rule engine   |          | Claude agent      |         | OpenTelemetry   |
 | (Python dict  |          | (Anthropic SDK,   |         | SDK  -> SigNoz  |
-|  of checkers) |          |  tool use,        |         |  (traces, logs, |
-|               |          |  prompt caching)  |         |   cost/run)     |
-+---------------+          +--------+----------+         +-----------------+
-                                    |
-                                    v
-                          +-------------------+
-                          | ChromaDB          |
-                          | RAG index of:     |
-                          |  - GDS standard   |
-                          |  - NCSC guidance  |
-                          +-------------------+
+|  of checkers, |          |  tool use,        |         |  (traces, logs, |
+|  loads clause |          |  full standards   |         |   cost/run)     |
+|  refs from    |          |  in cached        |         |                 |
+|  standards.   |          |  system prompt)   |         |                 |
+|  yaml)        |          |                   |         |                 |
++---------------+          +-------------------+         +-----------------+
 ```
 
 **Data flow, one finding:**
 
 1. Rule engine emits a finding: `rule_id`, `severity`, `location` (JSONPath into the spec), `snippet`.
-2. If the rule is LLM-type or the finding needs a suggestion, agent is called.
-3. Agent retrieves top-3 relevant clauses from ChromaDB (query = rule description + snippet).
+2. If the rule is LLM-type or the finding needs a suggestion, the agent is called.
+3. Agent receives: the finding, the rule's pre-declared citation clause (looked up in `standards.yaml`), and the full standards text pinned in the cached system prompt.
 4. Agent proposes a **JSON Patch (RFC 6902)** against the spec, plus a rationale and clause quote.
 5. Patch is validated against the OpenAPI schema *before* being shown to the user (invalid patches are dropped, not offered).
 6. CLI renders the diff with `Rich`, waits for user input, applies on `y`.
@@ -176,7 +176,7 @@ Distilled by hand from the GDS + NCSC standards. Each rule has (id, severity, so
 **Why this shape:**
 - Deterministic layer is fast, free, and reproducible — the bulk of the value.
 - LLM is used only where judgement is needed — keeps cost bounded and results trustworthy.
-- RAG grounds every AI suggestion in the actual standard, so the tool cites its work.
+- Static clause map + cached standards text grounds every AI suggestion in a pre-declared quote — no retrieval failure modes, no vector-store dependency.
 - OpenTelemetry to SigNoz makes the tool itself observable: an API-quality tool that eats its own dog food.
 
 ## 9. Technology stack & tools
@@ -216,13 +216,14 @@ Choices are picked as best-fit for a 2-day build with Claude in the loop — not
 | **Prompt caching** | Cache the GDS + NCSC standard text as a large system prompt (~50-100 KB). Non-negotiable cost win when running across many findings. |
 | **Tool use** | Two tools exposed to the model: `retrieve_clause(query)` and `propose_patch(finding, patch, rationale, citation)`. Keeps outputs structured. |
 
-### 9.5 RAG
+### 9.5 Standards corpus (no RAG in MVP)
 
 | Choice | Reason |
 |---|---|
-| **ChromaDB** | Zero-infra, single-file persistent store; standards corpus is small enough that anything heavier is overkill. |
-| **`sentence-transformers` — `all-MiniLM-L6-v2`** | Local embeddings, no extra API dep, plenty good for the standards corpus. |
-| **Markdown chunks, ~500 tokens each, with source URL preserved** | Chunk granularity that maps cleanly to "cite the clause." |
+| **`standards.yaml`** — hand-curated file mapping each `clause_id` to `{section, text, url}` | Deterministic citation lookup by rule ID; no retrieval failure modes. |
+| **Full standards text pinned in the Claude system prompt, with prompt caching** | GDS + NCSC corpus is ~25-40K tokens — fits comfortably in context. Caching amortises cost across findings within a run. |
+
+We deliberately do not use a vector store or RAG for this MVP. The standards corpus is small enough to fit in-context, every rule already knows its own citation, and a static lookup is more reliable than semantic retrieval in a live demo. RAG is a Phase-2 concern (see s13) — added when the corpus grows past ~150K tokens (e.g. adding NHS standards, full MS API Guidelines, or internal enterprise standards).
 
 ### 9.6 Observability & FinOps
 
@@ -259,10 +260,10 @@ Choices are picked as best-fit for a 2-day build with Claude in the loop — not
 ### 9.10 Explicitly not chosen (and why)
 
 - **Go** — would help distribution but slows the RAG/agent build. Revisit post-hackathon.
-- **Spectral** — the industry-standard OpenAPI linter, but it's TypeScript. Subprocess-ing it from Python adds friction for 5-8 rules. Adopt in phase 2 for full GDS coverage.
+- **Spectral** — the industry-standard OpenAPI linter, but it's TypeScript. Subprocess-ing it from Python adds friction for ~11 rules. Adopt in phase 2 for full GDS coverage.
 - **LangChain / LlamaIndex** — heavier than we need; direct Anthropic SDK is cleaner and easier to reason about.
 - **Opus 4.7** as the default — capability we don't need at latency we can't afford in a live demo.
-- **A hosted vector DB** (Pinecone, Weaviate cloud) — no reason for network hops on a corpus this small.
+- **Any vector DB / RAG (ChromaDB, Pinecone, Weaviate, etc.)** — the standards corpus fits in-context and every rule has a pre-declared citation. RAG would add retrieval failure modes for no benefit. Revisit when the corpus grows past ~150K tokens.
 
 ## 10. Two-day build plan
 
@@ -275,8 +276,8 @@ Aggressive but realistic with two people and Claude in the loop. Times are budge
 | 0h - 1h | Scaffold repo: `pyproject.toml`, `uv` env, `Makefile`, CLI entrypoint, sample specs (`examples/broken.yaml`, `examples/good.yaml`) | either |
 | 0h - 1h | Pull 3-4 real specs from the GOV.UK API catalogue into `examples/real-world/` — mine them for "known good" and "credibly non-compliant" fixtures | either |
 | 1h - 3h | Deterministic rule engine: 5 rules (GDS-001 to GDS-005) with `(rule_id, severity, location, snippet)` finding shape | dev A |
-| 1h - 3h | RAG pipeline: fetch GDS + NCSC pages, chunk, embed with `sentence-transformers`, load into persistent Chroma dir | dev B |
-| 3h - 5h | Claude agent (Sonnet 4.6): tool-use loop with `retrieve_clause` + `propose_patch`; prompt caching on standards | dev B |
+| 1h - 3h | Author `standards.yaml`: distil GDS + NCSC clause text, tag each with `{clause_id, section, url}`; validate every rule's citation resolves | dev B |
+| 3h - 5h | Claude agent (Sonnet 4.6): tool-use loop with `propose_patch`; full standards text pinned in the cached system prompt | dev B |
 | 3h - 5h | Add remaining rules (GDS-006, GDS-007, GDS-008, NCSC-001) | dev A |
 | 5h - 7h | Wire agent into CLI: findings -> agent for LLM-type or suggestion mode; validate every proposed patch with `openapi-spec-validator` before offering | either |
 | 7h - 8h | End-of-day integration: run on `broken.yaml`, verify findings + raw suggestions land; commit + push | pair |
@@ -329,5 +330,6 @@ Ordered by likely value, not likely effort.
 4. **Versioned rulesets as packages** — `gds-ruleset@1.2.0`, so teams can pin and standards can evolve without a tool release.
 5. **Governance dashboard** — aggregate audit reports across a department's repos; give API governance leads a real view.
 6. **Additional standards** — NHS API standards, internal enterprise standards; ruleset shape stays the same.
-7. **Go rewrite of the CLI shell** — if adoption grows and single-binary distribution matters more than iteration speed.
-8. **IDE extension** — inline warnings as the spec is edited.
+7. **RAG for the standards corpus** — add ChromaDB + `sentence-transformers` when the corpus grows past ~150K tokens (adding NHS API standards, full MS API Guidelines, internal enterprise standards). The `standards.yaml` structure we already have becomes the source of chunks.
+8. **Go rewrite of the CLI shell** — if adoption grows and single-binary distribution matters more than iteration speed.
+9. **IDE extension** — inline warnings as the spec is edited.

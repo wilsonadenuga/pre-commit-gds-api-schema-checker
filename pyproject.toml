@@ -1,0 +1,43 @@
+[project]
+name = "gds-api-schema-uplift"
+version = "0.1.0"
+description = "Pre-commit guardrail that checks an OpenAPI spec against the GDS + NCSC API standards and proposes cited, human-approved fixes."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+# Dependency set per PRD s9. Pinned to major versions only — this is a 2-day build
+# and `uv lock` carries the exact resolution.
+dependencies = [
+    # s9.2 CLI + UX
+    "typer>=0.12",
+    "rich>=13.7",
+    "prompt_toolkit>=3.0",
+    # s9.3 OpenAPI handling
+    "ruamel.yaml>=0.18",
+    "openapi-spec-validator>=0.7",
+    "jsonpatch>=1.33",
+    # s9.4 AI layer
+    "anthropic>=0.40",
+    # s9.6 Observability
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp>=1.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+gds-api-schema-uplift = "gds_api_schema_uplift.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gds_api_schema_uplift"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

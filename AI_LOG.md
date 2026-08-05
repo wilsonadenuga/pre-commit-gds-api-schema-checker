@@ -114,6 +114,38 @@ A follow-up pass caught one defect introduced by the fixes: the dependency graph
 5b and Phase 6 as hard edges off Phase 4 while the phase text called those
 dependencies soft. Annotated as soft edges.
 
+**6. "implement phase 0 in PLAN.md"**
+
+Phase 0 built and its exit criterion verified: `make setup` from a clean tree, 50
+tests passing, CLI loading both fixtures and printing an empty report.
+
+Files created: `pyproject.toml`, `Makefile`, `README.md` (minimal — Phase 7 owns the
+full one), `standards.yaml` (schema only), `examples/broken.yaml`,
+`examples/good.yaml`, `src/gds_api_schema_uplift/{__init__,contracts,loader,standards,report,cli}.py`,
+`src/gds_api_schema_uplift/rules/__init__.py`, and three test modules.
+
+Two environment deviations from PRD s9.1, both handled rather than blocking:
+
+- **`uv` is not installed.** `make setup` uses it when present and falls back to
+  stdlib `venv` + `pip` otherwise. Installing uv globally was not done — that is the
+  user's call, not a side effect of a build target.
+- **Python is 3.13.5, not 3.12.** `requires-python = ">=3.12"` accommodates both.
+
+Two judgement calls worth recording:
+
+- **`standards.yaml` ships with `clauses: {}`** rather than 11 placeholder entries.
+  Phase 2 requires real extracts checked against the source URLs; placeholder text
+  would pass Phase 2's integrity test on invented content. A test asserts blank
+  `text` is rejected, to keep that door shut.
+- **The empty report states plainly that no rules ran.** "No findings" against an
+  empty registry would otherwise read as a compliance pass. Same for the empty
+  corpus.
+
+**The round-trip test earned its place immediately.** It failed on first run:
+ruamel's default dumper flattens block-sequence indentation, so every write would
+have reindented the developer's whole file — the exact `ruamel.yaml`-mangles-the-spec
+risk in PRD s11. Fixed with `yaml.indent(mapping=2, sequence=4, offset=2)`.
+
 ### Findings / open items
 
 - **PRD inconsistency (not yet fixed).** Goal #4 (`PRD.md:65`) and M4 (`PRD.md:80`)

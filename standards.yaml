@@ -1,0 +1,40 @@
+# The standards corpus — clause_id -> citable clause.
+#
+# SCHEMA IS FROZEN (Phase 0). Content is authored in Phase 2.
+#
+# Each entry:
+#
+#   clauses:
+#     <clause_id>:
+#       section:   human-readable location in the source document
+#       text:      the quotable extract shown to the developer
+#       url:       where the developer verifies it
+#       authority: standard | recommendation   (optional, defaults to standard)
+#
+# Rules declare their clause_id at registration (see rules/__init__.py), so lookup is
+# a static dict read. There is no retrieval step and no vector store at any phase —
+# PRD s9.5 and s9.10.
+#
+# `authority: recommendation` is required for the REC-* rules. It is what makes them
+# render as visibly not-GDS-mandated in every output format, rather than relying on
+# renderer conditionals.
+#
+# Phase 2 must populate all 11 v0.2 clause ids:
+#   GDS-001  HTTPS-only, TLS 1.2+                     GDS Security + service-manual/using-https
+#   GDS-002  ISO 8601 dates and times                 GDS (explicit)
+#   GDS-003  Versioning declared in URI path          GDS (explicit)
+#   GDS-004  JSON responses, UTF-8                    GDS (explicit)
+#   GDS-005  Consistent documented errors             GDS (explicit)
+#   NCSC-001 No http basic, no bare apiKey            GDS + NCSC s2
+#   NCSC-002 Auth declared, every operation covered   NCSC s2
+#   NCSC-003 additionalProperties: false on bodies    NCSC s4
+#   NCSC-004 429 defined on public endpoints          NCSC s5
+#   REC-001  kebab-case plural paths                  REST convention + MS API Guidelines  [recommendation]
+#   REC-002  Meaningful summary and description       OpenAPI conventions                  [recommendation]
+#
+# Deliberately empty rather than pre-filled with placeholder text: a fabricated
+# citation is worse than a missing one, and Phase 2's integrity test would pass on
+# invented content. Every `text` below must be a real extract, checked against the
+# source URL by hand.
+
+clauses: {}

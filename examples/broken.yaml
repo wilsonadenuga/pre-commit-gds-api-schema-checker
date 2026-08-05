@@ -1,0 +1,156 @@
+# DELIBERATELY NON-COMPLIANT fixture.
+#
+# Exactly one unambiguous violation per v0.2 rule — 11 rules, 11 expected findings.
+# Every violation is a *standards* violation, not a schema error: this document is
+# valid OpenAPI 3.1 and must stay that way, or the rule pass never gets to run.
+#
+# Violation map (keep in sync with .gds-goldens/ once Phase 1 lands):
+#
+#   GDS-001  servers[0].url uses http://                      -> servers[0]
+#   GDS-002  createdOn is dd/mm/yyyy, not ISO 8601            -> POST requestBody
+#   GDS-003  no version segment in the path                   -> paths./getUserList
+#   GDS-004  GET 200 responds application/xml, not JSON       -> GET 200 content
+#   GDS-005  POST 500 uses an ad-hoc error shape              -> POST 500 content
+#   NCSC-001 basicAuth is http/basic                          -> securitySchemes
+#   NCSC-002 GET opts out of auth with security: []           -> GET security
+#   NCSC-003 POST requestBody omits additionalProperties      -> POST requestBody schema
+#   NCSC-004 POST defines no 429                              -> POST responses
+#   REC-001  path is camelCase, verb-in-path, singular noun   -> paths./getUserList
+#   REC-002  GET has no summary or description                -> GET operation
+#
+# Each per-operation rule fires on exactly one operation; the other operation is
+# deliberately compliant for that rule, so counts stay 1:1.
+
+openapi: 3.1.0
+info:
+  title: Example Department User Service
+  version: 1.0.0
+  description: Fixture service used to exercise the GDS + NCSC ruleset.
+
+# GDS-001: plaintext transport.
+servers:
+  - url: http://api.example.gov.uk
+    description: Production
+
+security:
+  - basicAuth: []
+
+# GDS-003: no /v1/ segment.  REC-001: camelCase, verb-in-path, singular noun.
+paths:
+  /getUserList:
+    get:
+      # REC-002: no summary, no description.
+      operationId: getUserList
+      # NCSC-002: explicitly unauthenticated.
+      security: []
+      responses:
+        '200':
+          description: A list of users.
+          content:
+            # GDS-004: XML rather than JSON.
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '429':
+          description: Too many requests.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    post:
+      summary: Create a user
+      description: Creates a new user record and returns the stored representation.
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            # NCSC-003: no additionalProperties: false, so unexpected fields are accepted.
+            schema:
+              type: object
+              required:
+                - name
+                - createdOn
+              properties:
+                name:
+                  type: string
+                createdOn:
+                  # GDS-002: dd/mm/yyyy instead of an ISO 8601 date-time.
+                  type: string
+                  pattern: '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
+                  examples:
+                    - 31/12/2025
+      responses:
+        '201':
+          description: The created user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              # GDS-005: ad-hoc error shape rather than problem+json.
+              schema:
+                type: object
+                properties:
+                  err_msg:
+                    type: string
+                  err_code:
+                    type: integer
+        # NCSC-004: no 429 defined on this operation.
+
+components:
+  securitySchemes:
+    # NCSC-001: HTTP Basic.
+    basicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    User:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdOn:
+          type: string
+          format: date-time
+
+    Problem:
+      description: RFC 9457 problem details.
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri

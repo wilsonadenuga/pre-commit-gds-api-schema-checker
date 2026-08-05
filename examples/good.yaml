@@ -1,0 +1,159 @@
+# COMPLIANT fixture — the same service as broken.yaml, corrected.
+#
+# Must produce ZERO findings. M1 ("zero false positives on the sample compliant
+# spec") is measured against this file, so every rule added in Phases 1, 5a and 5b
+# has to stay silent here. If a new rule fires on this document, the rule is wrong
+# until proven otherwise.
+#
+# Comments below are load-bearing for a second reason: this file is also the
+# round-trip fixture. Phase 1's round-trip test loads it, dumps it, and asserts the
+# bytes are unchanged — so these comments and this key order are the assertion.
+#
+# Rule-by-rule compliance:
+#
+#   GDS-001  servers use https://
+#   GDS-002  all dates/times are format: date-time (ISO 8601)
+#   GDS-003  /v1/ version segment in the path
+#   GDS-004  every response body is application/json or application/problem+json
+#   GDS-005  errors are RFC 9457 problem+json on standard HTTP status codes
+#   NCSC-001 OAuth 2.0 client credentials — neither basic nor bare apiKey
+#   NCSC-002 auth declared globally and not opted out of by any operation
+#   NCSC-003 request bodies set additionalProperties: false
+#   NCSC-004 429 defined on every operation
+#   REC-001  kebab-case plural noun path
+#   REC-002  every operation has a meaningful summary and description
+
+openapi: 3.1.0
+info:
+  title: Example Department User Service
+  version: 1.0.0
+  description: Fixture service used to exercise the GDS + NCSC ruleset.
+
+servers:
+  - url: https://api.example.gov.uk
+    description: Production
+
+security:
+  - departmentOAuth: []
+
+paths:
+  /v1/users:
+    get:
+      summary: List users
+      description: >-
+        Returns a page of user records ordered by creation time. Requires the
+        users.read scope.
+      operationId: listUsers
+      responses:
+        '200':
+          description: A page of users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '429':
+          description: Too many requests.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    post:
+      summary: Create a user
+      description: Creates a new user record and returns the stored representation.
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - name
+                - createdOn
+              properties:
+                name:
+                  type: string
+                createdOn:
+                  type: string
+                  format: date-time
+                  examples:
+                    - '2025-12-31T09:30:00Z'
+      responses:
+        '201':
+          description: The created user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '429':
+          description: Too many requests.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+components:
+  securitySchemes:
+    departmentOAuth:
+      type: oauth2
+      description: Departmental OAuth 2.0 client credentials flow.
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example.gov.uk/oauth2/token
+          scopes:
+            users.read: Read user records
+            users.write: Create and amend user records
+
+  schemas:
+    User:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdOn:
+          type: string
+          format: date-time
+
+    Problem:
+      description: RFC 9457 problem details.
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri

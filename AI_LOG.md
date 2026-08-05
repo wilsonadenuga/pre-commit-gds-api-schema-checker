@@ -146,6 +146,77 @@ ruamel's default dumper flattens block-sequence indentation, so every write woul
 have reindented the developer's whole file — the exact `ruamel.yaml`-mangles-the-spec
 risk in PRD s11. Fixed with `yaml.indent(mapping=2, sequence=4, offset=2)`.
 
+**7. "implement phase 1 - consider using multi-agent approch"**
+
+Phase 1 built with a hybrid approach: substrate written centrally, then five
+concurrent subagents (one per `GDS-*` rule), then central integration.
+
+**Why hybrid rather than pure fan-out.** The five rules are genuinely independent,
+but `location` is a JSONPath that a Phase 3 patch will target, and findings from
+different rules are rendered and deduplicated together. Five agents left to their own
+devices would have produced five traversal idioms and five JSONPath dialects. So
+`rules/_traversal.py` (traversal + JSONPath construction + snippet rendering) and
+`rules/_registry.py` were written first and handed to every agent as a fixed
+contract. Verified afterwards by grep that no rule hand-builds a JSONPath.
+
+**A sequencing trap worth remembering.** `rules/__init__.py` imports rule modules for
+their registration side effect. Adding those imports *before* the agents ran would
+have broken every agent's test run, since a missing module breaks any import of the
+package. The imports were left out until integration.
+
+**Registry moved to `rules/_registry.py`** so rule modules can `from ._registry import
+register` without importing a half-initialised `rules/__init__`. `__init__` re-exports,
+so callers are unaffected.
+
+Also central: the PRD s7.3 version gate (3.1 clean, 3.0 with a note, Swagger 2.0
+refused with exit 3 — a refused spec has not been assessed, so exit 0 would misreport
+it as clean), and the report's snippet column.
+
+**Verified independently rather than trusting agent reports:** exactly 5 findings on
+`broken.yaml`, one per rule, at the documented locations; 0 on `good.yaml`. 226 tests
+pass. Added cross-rule integration tests no single agent could have written — no two
+rules claim the same location, declared severity/clause matches what each rule emits,
+the pass does not perturb the round-trip structure, and no rule raises on any of 11
+structurally odd specs.
+
+Two things the agents surfaced that were worth keeping:
+
+- YAML treats `200:` and `'200':` as distinct response keys but both stringify to the
+  same JSONPath segment, so location collisions are real, not hypothetical.
+- GDS-005 treats a non-standard status code and an ad-hoc error shape as two
+  independent violations, so one response can yield two findings. Does not affect
+  either fixture.
+
+**8. "why use the phrase 'phase' in the test file naming" → "fix and use a descriptive name"**
+
+User challenge, and correct. Test modules had been named for the build phase that
+introduced them (`test_phase0_scaffold.py`, `test_phase1_integration.py`), and rule
+modules were named for their id alone (`gds_001.py`).
+
+**Why phase-naming was wrong:** the axis is time, not subject. Two concrete costs had
+already materialised. First, `test_phase0_scaffold.py` had to be *edited* during Phase
+1 when `test_registry_is_empty_until_phase_1` became false — a phase-named file invites
+later phases to reach back and mutate it, destroying the history of what a test
+originally asserted. Second, the two files had begun duplicating concerns: both held
+CLI tests, round-trip tests, fixture tests and registry assertions, because a temporal
+split cuts across every subject.
+
+Renamed and split by subject: `test_spec_loading.py`, `test_example_spec_quality.py`,
+`test_rule_registry.py`, `test_ruleset_behaviour.py`, `test_rule_robustness.py`,
+`test_cli.py`, plus `tests/example_specs.py` holding fixture paths and spec-writing
+helpers that had been redeclared per file.
+
+Rule modules renamed to `<rule_id>_<what_it_checks>` (e.g.
+`gds_005_problem_details_errors.py`) so the filename says what the rule does while the
+directory still sorts by rule id. `rules/_walk.py` → `rules/_traversal.py`.
+
+Phase traceability now lives in docstrings ("Phase 2 authors the corpus"), which stays
+greppable without putting an expiring label in a filename.
+
+255 tests pass after the split, up from 226 — the redistribution surfaced gaps worth
+filling (a vacuous-pass guard on the compliant fixture, JSON-stdout-stays-valid,
+rule_type consistency, two more odd-spec shapes).
+
 ### Findings / open items
 
 - **PRD inconsistency (not yet fixed).** Goal #4 (`PRD.md:65`) and M4 (`PRD.md:80`)

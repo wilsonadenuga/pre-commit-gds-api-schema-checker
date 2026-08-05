@@ -57,17 +57,19 @@ def render_text(
         _print_ruleset_note(console, standards)
         return
 
-    table = Table(show_lines=False, header_style="bold")
-    table.add_column("Rule")
-    table.add_column("Severity")
-    table.add_column("Location")
-    table.add_column("Citation")
+    table = Table(show_lines=True, header_style="bold")
+    table.add_column("Rule", no_wrap=True)
+    table.add_column("Severity", no_wrap=True)
+    table.add_column("Location", overflow="fold")
+    table.add_column("Snippet", overflow="fold")
+    table.add_column("Citation", overflow="fold")
 
     for finding in findings:
         table.add_row(
             finding.rule_id,
             f"[{SEVERITY_STYLE[finding.severity]}]{finding.severity.value}[/]",
             finding.location,
+            finding.snippet,
             _clause_cell(finding, standards),
         )
     console.print(table)
@@ -79,6 +81,7 @@ def render_text(
         f"{counts[Severity.WARNING]} warning, "
         f"{counts[Severity.SUGGESTION]} suggestion"
     )
+    _print_ruleset_note(console, standards)
 
 
 def _print_ruleset_note(console: Console, standards: Standards | None) -> None:

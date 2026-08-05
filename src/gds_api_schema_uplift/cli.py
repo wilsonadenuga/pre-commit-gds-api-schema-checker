@@ -14,7 +14,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from .loader import SpecLoadError, load_spec
+from .loader import SpecLoadError, SpecVersionRejected, load_spec, version_gate
 from .report import render_json, render_text
 from .rules import run_deterministic_pass
 from .standards import StandardsError, default_standards_path, load_standards
@@ -89,6 +89,16 @@ def check(
     except SpecLoadError as exc:
         err.print(f"[red]Could not load spec:[/red] {exc}")
         raise typer.Exit(EXIT_ERROR) from None
+
+    # PRD s7.3 version policy. A rejection is an operational failure, not a finding:
+    # we have not assessed compliance, so exiting 1 would misreport a clean spec.
+    try:
+        upgrade_note = version_gate(spec)
+    except SpecVersionRejected as exc:
+        err.print(f"[red]Unsupported spec version:[/red] {exc}")
+        raise typer.Exit(EXIT_ERROR) from None
+    if upgrade_note and output_format is not OutputFormat.JSON:
+        err.print(f"[yellow]Note:[/yellow] {upgrade_note}")
 
     corpus_path = standards_path or default_standards_path()
     try:

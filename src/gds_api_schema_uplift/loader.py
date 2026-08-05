@@ -24,6 +24,14 @@ class SpecLoadError(ValueError):
     """Raised when a spec cannot be parsed or is not an OpenAPI document."""
 
 
+class SpecVersionRejected(SpecLoadError):
+    """Raised when the document's version is one we deliberately refuse.
+
+    Distinct from SpecLoadError so the CLI can tell "this file is broken" from
+    "this file is fine but out of scope", which need different messages.
+    """
+
+
 def _round_trip_yaml() -> YAML:
     yaml = YAML()  # round-trip mode
     yaml.preserve_quotes = True
@@ -104,4 +112,45 @@ def load_spec(path: str | Path) -> LoadedSpec:
         data=data,
         openapi_version=str(openapi_version) if openapi_version is not None else None,
         swagger_version=str(swagger_version) if swagger_version is not None else None,
+    )
+
+
+def version_gate(spec: LoadedSpec) -> str | None:
+    """Apply the PRD s7.3 version policy.
+
+    3.1 passes clean, 3.0 passes with an advisory note, Swagger 2.0 is refused with
+    an upgrade message, and anything else is refused as unrecognised.
+
+    Returns the advisory note to show the developer, or None when there is nothing
+    to say. Raises SpecVersionRejected when the document is out of scope.
+
+    Refusing rather than best-effforting 2.0 is deliberate: too many v0.2 rules
+    cannot be expressed against 2.0 (no `content` mapping, no `securitySchemes`
+    shape we check), so a 2.0 run would report a misleadingly clean result.
+    """
+    if spec.is_swagger_2:
+        raise SpecVersionRejected(
+            f"{spec.path}: Swagger/OpenAPI 2.0 is not supported. Convert the document "
+            f"to OpenAPI 3.1 (3.0 is also accepted) and run again — several of the "
+            f"rules cannot be expressed against 2.0, so a 2.0 run would look "
+            f"misleadingly clean."
+        )
+
+    version = spec.openapi_version
+    if version is None:
+        raise SpecVersionRejected(
+            f"{spec.path}: no 'openapi' version string found; expected OpenAPI 3.0 or 3.1."
+        )
+
+    if version.startswith("3.1"):
+        return None
+    if version.startswith("3.0"):
+        return (
+            f"This spec declares OpenAPI {version}. Consider upgrading to 3.1, which "
+            f"aligns with JSON Schema 2020-12. All rules still run against 3.0."
+        )
+
+    raise SpecVersionRejected(
+        f"{spec.path}: unsupported OpenAPI version {version!r}; this tool targets "
+        f"3.0 and 3.1."
     )

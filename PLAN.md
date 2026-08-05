@@ -120,7 +120,10 @@ GitHub Action.
 
 **Deliverables**
 
-- Anthropic SDK client, Sonnet 4.6 (`claude-sonnet-4-6`).
+- Anthropic SDK client, on the model carried over from PRD s9.4 — "Sonnet 4.6",
+  `claude-sonnet-4-6`. **Verify this model ID resolves before writing against it**
+  (open item 7); the reasoning for choosing mid-tier over Opus holds regardless of
+  which generation is current.
 - **Prompt caching:** full GDS + NCSC corpus as a `cache_control` system block
   (~25–40K tokens per PRD s9.5). Assert cache hits on calls 2..n of a run.
 - **Tool use**, two tools per PRD s9.4: `retrieve_clause(clause_id)` — a static
@@ -162,37 +165,73 @@ rather than a linter. Depends on Phase 3.
 - Snapshot test: apply a known patch set to `good.yaml`, assert comments and key
   order survive.
 
-**Covers:** req 8, req 9 (write half), req 3 (partial — the loop the `REC-*` rules render into)
+**Covers:** req 8, req 9 (write half)
 
 **Exit criterion:** an approved patch lands on disk with a `.bak` alongside; a
 rejected one leaves the file untouched; `e` cannot introduce an invalid spec.
 
-**MVS floor reached here.** With Phases 0–4 plus `make demo` from Phase 7, the six
-`CLAUDE.md` MVS items are all satisfied. Everything after this is strengthening.
+**`e` is cuttable, `y`/`n` is not.** `CLAUDE.md`'s cut order lists the `e`dit action
+as droppable. Build `y`/`n`/`w`/`q` first and treat `e` as the last deliverable of the
+phase; if it goes, the exit criterion above loses only its final clause.
+
+**MVS items 1–5 are satisfied here.** Item 6 (`make demo` from a clean clone) lands in
+Phase 7, so the MVS floor is not fully standing until then. Everything in Phases 5–6
+is strengthening rather than floor.
 
 ---
 
-## Phase 5 — Complete the v0.2 ruleset
+## Phase 5 — Complete the v0.2 ruleset (split)
 
-**Goal:** the remaining 4 hard rules and 2 recommendations. Additive — no new
-architecture, which is why it sits after the loop is closed.
+Phase 5 is split along its real dependency line — **deterministic rules need only the
+Phase 1 registry; LLM rules need the Phase 3 agent** — so that both halves land before
+`CLAUDE.md`'s Day 2 10:00 feature freeze. Treating the six remaining rules as one
+block is what forced them past the freeze in the first place.
+
+### Phase 5a — Deterministic `NCSC-*` rules
+
+**Goal:** the 4 remaining hard rules. Depends on Phases 1–2 only, **not** on the agent
+or the approval loop, so it runs in parallel with Phase 3.
 
 **Deliverables**
 
 - `NCSC-001` no `http basic`, no bare `apiKey`; `NCSC-002` auth declared and every
   operation covered (deny-by-default); `NCSC-003` request bodies set
   `additionalProperties: false`; `NCSC-004` `429` defined on public endpoints.
-- `REC-001` kebab-case plural paths, `REC-002` meaningful `summary`/`description` —
-  both routed through the Phase 3 LLM path, both rendered as recommendations.
-- Goldens for the expanded finding set in `.gds-goldens/`.
+- Goldens for the 9-hard-rule finding set in `.gds-goldens/`.
 
-**Covers:** req 2 (remaining 4), req 3
+**Covers:** req 2 (remaining 4)
+
+**Exit criterion:** all 9 hard rules fire on `broken.yaml`, still zero on `good.yaml`.
+
+**Cut tail:** `NCSC-003` and `NCSC-004` are the last two items in `CLAUDE.md`'s cut
+order — sequence them last within 5a. `NCSC-001`/`NCSC-002` are `error` severity and
+carry the NCSC §2 anchor, so they earn their place ahead of both.
+
+### Phase 5b — `REC-*` recommendation rules
+
+**Goal:** the 2 recommendations, routed through the LLM path. Depends on Phase 3 for
+the agent; benefits from Phase 4 for interactive rendering but does not require it —
+`REC-*` findings render fine in report mode if the loop slips.
+
+**Deliverables**
+
+- `REC-001` kebab-case plural paths, `REC-002` meaningful `summary`/`description`.
+- Both carry `authority: recommendation` from Phase 2, so they render as visibly
+  not-GDS-mandated in every output format.
+- Goldens extended to the full 11-rule finding set.
+
+**Covers:** req 3
 
 **Exit criterion:** all 11 v0.2 rules fire correctly on `broken.yaml`, still zero on
-`good.yaml`.
+`good.yaml`; `REC-*` findings are labelled as recommendations, not mandates.
 
-**Cut boundary:** per `CLAUDE.md`, `REC-*` then `NCSC-003`/`NCSC-004` are the first
-things to drop under time pressure. Sequence them last within the phase.
+**Cut position:** `REC-*` sits second in `CLAUDE.md`'s cut order — after the GitHub
+Action, ahead of the SigNoz dashboard and the `e`dit action. Under pressure 5b goes
+before Phase 6's dashboard does, which is why it is scheduled ahead of it.
+
+**Freeze constraint:** 5b must complete before Day 2 10:00. If it has not started by
+then it is cut, not deferred — the citation integrity assertion in Phase 2 stays
+scoped to the registry as it actually stands, so a cut 5b leaves the build green.
 
 ---
 
@@ -243,13 +282,18 @@ dashboard is a fallback written under pressure.
 
 ## Phase 8 — Stretch, in value order
 
-Only after Phase 7's exit criterion holds.
+Only after Phase 7's exit criterion holds. Order follows `CLAUDE.md`'s stretch-goal
+list as written.
 
 1. GitHub Actions template — `--format=github`, findings as annotations plus a
    summary comment, non-blocking.
-2. Haiku 4.5 triage pass deciding whether a finding needs the Sonnet path.
-3. Real-world fixtures from the GOV.UK API catalogue as a second demo beat.
-4. Offline resilience — vendored wheels via `uv pip download`, cached-response mode.
+2. Real-world fixtures from the GOV.UK API catalogue as a second demo beat.
+3. Haiku 4.5 triage pass deciding whether a finding needs the Sonnet path. See open
+   item 4 — if the C3 answer is kept as written, this is not stretch and belongs in
+   Phase 3.
+4. Offline resilience — cached-response mode for Claude, vendored wheels via
+   `uv pip download`. See open item 2 — if the demo is offline, this is not stretch
+   either.
 
 ---
 
@@ -264,25 +308,39 @@ Phase 0 (contracts + scaffold)
     |                           |
     +------------+--------------+
                  |
-          Phase 3 (agent + validation gate + cost)
+    +------------+---------------------------+
+    |                                        |
+ Phase 3 (agent + validation gate + cost)  Phase 5a (NCSC-001..004)
+    |                                        |
+    +------------+---------------------------+
                  |
-          Phase 4 (approval loop + safe writes)   <-- MVS floor
+          Phase 4 (approval loop + safe writes)   <-- MVS items 1-5
                  |
     +------------+------------+
     |                         |
- Phase 5 (NCSC + REC)   Phase 6 (OTel + SigNoz)
+ Phase 5b (REC-001/002)  Phase 6 (OTel + SigNoz)
     |                         |
     +------------+------------+
                  |
-          Phase 7 (package, test, docs, rehearse)
+          Phase 7 (package, test, docs, rehearse)  <-- MVS floor complete
                  |
           Phase 8 (stretch)
 ```
 
-Phases 1‖2 and 5‖6 are the only genuine parallel pairs. With two devs, Phase 0 is
-done together — splitting before the contracts are frozen is what creates the
-double-integration this plan avoids. Solo, run them in order and expect Phase 5's
-`REC-*` rules and Phase 6's dashboard to be the casualties, per the cut order.
+Three genuine parallel pairs: 1‖2, 3‖5a, and 5b‖6. With two devs, Phase 0 is done
+together — splitting before the contracts are frozen is what creates the
+double-integration this plan avoids. Solo, run them in order and expect Phase 5b and
+Phase 6's dashboard to be the casualties, per the cut order.
+
+Note that 5a is drawn parallel to Phase 3 rather than after it: `NCSC-001`–`NCSC-004`
+are deterministic and touch only the Phase 1 registry, so nothing in them waits on the
+agent. This is the edge that buys back the schedule room the freeze took away.
+
+Two edges in the graph are soft rather than hard. **5b after Phase 4** is a
+preference, not a requirement — 5b's hard dependency is Phase 3, and it can run before
+the loop with `REC-*` findings rendered in report mode. **Phase 6 after Phase 4** is
+likewise soft for the rule-pass and agent spans; only the per-decision spans need the
+loop to exist. Every other edge is a real dependency.
 
 ## Reconciling phases with the two-day schedule
 
@@ -291,19 +349,27 @@ double-integration this plan avoids. Solo, run them in order and expect Phase 5'
 | Day 1 10:00 scaffold + fixtures | Phase 0 |
 | Day 1 11:10 rule engine ‖ clause map | Phases 1 ‖ 2 |
 | Day 1 13:30 Claude agent | Phase 3 |
-| Day 1 15:20 wire agent + NCSC rules | Phase 3 finish, Phase 5 start |
-| Day 1 exit | Phases 0–3 complete |
-| Day 2 09:30 approval loop | Phase 4 |
+| Day 1 15:20 wire agent + NCSC rules | Phase 3 finish ‖ Phase 5a |
+| Day 1 exit | Phases 0–3 and 5a complete |
+| Day 2 09:30 approval loop | Phase 4, then Phase 5b |
+| Day 2 10:00 **feature freeze** | 5a and 5b both closed by here — no rules after |
 | Day 2 10:00 telemetry + Docker | Phase 6, Phase 7 start |
 | Day 2 11:10 SigNoz + polish | Phase 6 finish |
 | Day 2 12:00 demo dry-run | Phase 7 exit |
 
+The 09:30–10:00 window holds Phase 4 and Phase 5b together, which is tight. With two
+devs they run in parallel (loop on dev A, `REC-*` on dev B). Solo, Phase 4 takes the
+window and 5b moves into Day 1's 15:20 slot alongside 5a — it only needs the Phase 3
+agent, not the loop — or it is cut per the cut order. What 5b must not do is drift past
+10:00.
+
 Two deviations from `CLAUDE.md`'s ordering, both deliberate:
 
-- **Phase 4 before Phase 5.** `CLAUDE.md` starts the `NCSC-*` rules on Day 1 at
-  15:20, before the Day 2 approval loop. Closing the loop first means the MVS floor
-  is standing at the earliest possible moment; adding rules to a working loop is
-  additive and safely cuttable, whereas rules without a loop are not demonstrable.
+- **Phase 5 is split** rather than run as one block. `CLAUDE.md` schedules the
+  `NCSC-*` rules at Day 1 15:20 and freezes features at Day 2 10:00. The deterministic
+  half (5a) keeps that Day 1 placement; the LLM half (5b) needs the Phase 3 agent, so
+  it moves to Day 2 ahead of the freeze. Both halves stay inside the freeze, which a
+  single Phase 5 sequenced after the approval loop could not.
 - **Phase 6's fallback exporter before its dashboard**, for the reason given in
   that phase.
 
@@ -330,3 +396,11 @@ Unresolved inputs that affect this plan. None block Phase 0.
    number is being graded, set it before Phase 7.
 6. **PRD s10/s11 remain stale** against the v0.2 ruleset (`CLAUDE.md` divergence
    note 5). This plan supersedes PRD s10 as the build sequence.
+7. **Model IDs inherited from PRD s9.4 are unverified.** The PRD names "Claude Sonnet
+   4.6" (`claude-sonnet-4-6`) as primary, "Claude Haiku 4.5"
+   (`claude-haiku-4-5-20251001`) for triage, and "Opus 4.7" in s9.10's
+   not-chosen list. The current generation is the Claude 5 family, so at least the
+   Sonnet and Opus references look stale. Confirm the exact IDs against the current
+   model list at the start of Phase 3 — an invalid ID blocks that phase outright.
+   This is inherited from the PRD rather than a defect in this plan, but it lands
+   here first.

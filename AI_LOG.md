@@ -81,6 +81,39 @@ Phase 6's console-JSON fallback exporter before the SigNoz dashboard (the fallba
 is the medium-likelihood risk mitigation, so it should not be written under
 pressure).
 
+**5. "is there inconsistency within the plan" → "fix all of them and use the phase 5 split"**
+
+Self-audited the phased `PLAN.md` and found 8 inconsistencies. Requirement coverage
+was clean (all 15 `CLAUDE.md` requirements discharged, none dropped or
+double-owned); the defects were all in sequencing and coverage labels.
+
+The consequential one: the plan claimed a deliberate "Phase 4 before Phase 5"
+deviation, which pushed six rules past `CLAUDE.md`'s Day 2 10:00 feature freeze into
+a window Phase 4 already occupied — and the reconciliation table then contradicted
+that deviation by starting Phase 5 on Day 1.
+
+Fixed by **splitting Phase 5 along its real dependency line** (user-chosen option):
+5a = the 4 deterministic `NCSC-*` rules, which need only the Phase 1 registry and so
+run parallel to Phase 3 on Day 1; 5b = the 2 LLM `REC-*` rules, which need the
+Phase 3 agent and land Day 2 before the freeze. Both halves now sit inside the
+freeze, which a single Phase 5 after the approval loop could not.
+
+Seven smaller fixes: Phase 2's exit criterion split into a corpus-side assertion
+(all 11 entries resolve — holds at Phase 2) and a registry-walk assertion (closes at
+5b), which also removed a hidden Phase 1↔2 dependency the graph denied; "MVS floor"
+downgraded to "MVS items 1–5" at Phase 4 since item 6 is Phase 7; req 3
+de-attributed from Phase 4; req 11 marked "print half" in Phase 3 to match the
+convention used for req 9; `CLAUDE.md`'s cut order no longer compressed; `e`dit
+marked cuttable in Phase 4; Phase 8 restored to `CLAUDE.md`'s stretch ordering.
+
+Also added open item 7 — the model IDs inherited from PRD s9.4 (`claude-sonnet-4-6`,
+and "Opus 4.7" in s9.10) are unverified and look stale against the Claude 5
+generation. An invalid ID blocks Phase 3 outright. **Unresolved.**
+
+A follow-up pass caught one defect introduced by the fixes: the dependency graph drew
+5b and Phase 6 as hard edges off Phase 4 while the phase text called those
+dependencies soft. Annotated as soft edges.
+
 ### Findings / open items
 
 - **PRD inconsistency (not yet fixed).** Goal #4 (`PRD.md:65`) and M4 (`PRD.md:80`)

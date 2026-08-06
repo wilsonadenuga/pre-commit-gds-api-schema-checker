@@ -26,8 +26,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-from example_specs import BROKEN_SPEC, GOOD_SPEC
+# Under pytest the tests/ directory is already on sys.path via conftest
+# discovery; under `python -m tests.test_goldens --regenerate` it is not,
+# so add it manually before the peer-file import.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import pytest  # noqa: E402
+from example_specs import BROKEN_SPEC, GOOD_SPEC  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GOLDENS_DIR = REPO_ROOT / ".gds-goldens"

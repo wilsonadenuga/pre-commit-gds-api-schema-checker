@@ -43,6 +43,28 @@ from ._registry import register
 from ._traversal import as_mapping, child, jp, snippet
 
 
+def _describe_weakness(name: object, scheme: dict[str, Any]) -> str:
+    """Human-readable snippet naming the specific weakness.
+
+    Kept close to `_is_weak_scheme` so a change to what "weak" means shows
+    up on the message too. `name` is the securityScheme's key (e.g.
+    `basicAuth`) — the developer's own label for it.
+    """
+    scheme_type = scheme.get("type")
+    if scheme_type == "http" and str(scheme.get("scheme", "")).lower() == "basic":
+        return (
+            f"'{name}' is HTTP basic authentication — banned by NCSC §2; "
+            f"use OAuth 2.0 or OpenID Connect instead"
+        )
+    if scheme_type == "apiKey":
+        location = scheme.get("in", "?")
+        return (
+            f"'{name}' is a bare apiKey (in={location}) — banned by NCSC §2; "
+            f"use OAuth 2.0 or OpenID Connect instead"
+        )
+    return f"'{name}' uses a weak authentication scheme"  # pragma: no cover
+
+
 def _is_weak_scheme(scheme: dict[str, Any]) -> bool:
     """True when a security scheme is HTTP Basic or a bare API key.
 
@@ -86,7 +108,7 @@ def check(spec: LoadedSpec) -> list[Finding]:
                 severity=Severity.ERROR,
                 # The scheme entry itself: a fix replaces the whole named scheme.
                 location=child(jp("components", "securitySchemes"), str(name)),
-                snippet=snippet(scheme),
+                snippet=snippet(_describe_weakness(name, scheme)),
                 clause_id="NCSC-001",
                 rule_type=RuleType.DETERMINISTIC,
             )

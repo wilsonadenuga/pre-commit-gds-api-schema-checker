@@ -228,7 +228,10 @@ def check(spec: LoadedSpec) -> list[Finding]:
                 # The media-type entry, not the schema: a fix replaces the whole
                 # entry (media type *and* schema) with a problem+json one.
                 location=content.location,
-                snippet=snippet(content.schema or content.media_object),
+                snippet=snippet(
+                    f"error uses {content.media_type} with a custom schema — "
+                    f"use application/problem+json (RFC 9457) instead"
+                ),
                 clause_id="GDS-005",
                 rule_type=RuleType.DETERMINISTIC,
             )

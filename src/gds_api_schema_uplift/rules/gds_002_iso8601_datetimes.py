@@ -164,11 +164,18 @@ def check(spec: LoadedSpec) -> list[Finding]:
                 continue
             if ref.location in found:
                 continue
+            # Actionable snippet: name the property and say what's missing.
+            # Fixes an on-screen "{type, pattern, examples}" that looked like
+            # a shape hint but told the developer nothing about the violation.
+            field_name = ref.name or "(anonymous)"
             found[ref.location] = Finding(
                 rule_id="GDS-002",
                 severity=Severity.WARNING,
                 location=ref.location,
-                snippet=snippet(ref.schema),
+                snippet=snippet(
+                    f"date-named field '{field_name}' has no 'format: date-time' — "
+                    f"add it to declare ISO 8601"
+                ),
                 clause_id="GDS-002",
                 rule_type=RuleType.DETERMINISTIC,
             )

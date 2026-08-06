@@ -46,7 +46,7 @@ clauses:
       secure your API.
 
   GDS-002:
-    section: Follow the Technology Code of Practice and other standards
+    section: Use ISO 8601 for dates and times
     authority: standard
     url: https://www.gov.uk/guidance/gds-api-technical-and-data-standards
     text: >-

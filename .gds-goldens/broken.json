@@ -14,7 +14,7 @@
       "rule_id": "GDS-002",
       "rule_type": "deterministic",
       "severity": "warning",
-      "snippet": "{type, pattern, examples}"
+      "snippet": "date-named field 'createdOn' has no 'format: date-time' \u2014 add it to declare ISO 8601"
     },
     {
       "clause_id": "GDS-003",
@@ -30,7 +30,7 @@
       "rule_id": "GDS-004",
       "rule_type": "deterministic",
       "severity": "warning",
-      "snippet": "application/xml"
+      "snippet": "response media type is application/xml \u2014 GDS mandates JSON (application/json or a +json subtype)"
     },
     {
       "clause_id": "GDS-005",
@@ -38,7 +38,7 @@
       "rule_id": "GDS-005",
       "rule_type": "deterministic",
       "severity": "warning",
-      "snippet": "{type, properties}"
+      "snippet": "error uses application/json with a custom schema \u2014 use application/problem+json (RFC 9457) instead"
     },
     {
       "clause_id": "NCSC-001",
@@ -46,7 +46,7 @@
       "rule_id": "NCSC-001",
       "rule_type": "deterministic",
       "severity": "error",
-      "snippet": "{type, scheme}"
+      "snippet": "'basicAuth' is HTTP basic authentication \u2014 banned by NCSC \u00a72; use OAuth 2.0 or OpenID Connect instead"
     },
     {
       "clause_id": "NCSC-002",
@@ -54,7 +54,7 @@
       "rule_id": "NCSC-002",
       "rule_type": "deterministic",
       "severity": "error",
-      "snippet": "security: [] on GET /getUserList — explicit opt-out"
+      "snippet": "security: [] on GET /getUserList \u2014 explicit opt-out"
     },
     {
       "clause_id": "NCSC-003",
@@ -70,7 +70,7 @@
       "rule_id": "NCSC-004",
       "rule_type": "deterministic",
       "severity": "suggestion",
-      "snippet": "201, 500"
+      "snippet": "no 429 response defined; declared: 201, 500"
     },
     {
       "clause_id": "REC-001",
@@ -78,7 +78,7 @@
       "rule_id": "REC-001",
       "rule_type": "deterministic",
       "severity": "suggestion",
-      "snippet": "path is not kebab-case (contains uppercase or underscore); verb in path — put verbs in the HTTP method, not the URI: /g…"
+      "snippet": "path is not kebab-case (contains uppercase or underscore); verb in path \u2014 put verbs in the HTTP method, not the URI: /g\u2026"
     },
     {
       "clause_id": "REC-002",

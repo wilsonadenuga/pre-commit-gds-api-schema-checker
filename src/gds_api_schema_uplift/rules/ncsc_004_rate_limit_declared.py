@@ -102,10 +102,15 @@ def check(spec: LoadedSpec) -> list[Finding]:
         if _acknowledges_rate_limit(responses):
             continue
 
-        # Snippet: the codes that ARE declared, so the reader sees what was
-        # documented and can infer what is missing. Keys are stringified for
-        # the same integer/string reason as the check above.
+        # Snippet: say what's missing, and list the codes that ARE declared so
+        # the reader sees what was documented. Keys stringified for the same
+        # integer/string reason as the check above.
         declared = ", ".join(str(key) for key in responses)
+        message = (
+            f"no 429 response defined; declared: {declared}"
+            if declared
+            else "no 429 response defined (no responses declared at all)"
+        )
         findings.append(
             Finding(
                 rule_id="NCSC-004",
@@ -113,7 +118,7 @@ def check(spec: LoadedSpec) -> list[Finding]:
                 # Locate at the `responses` object rather than the operation:
                 # a fix inserts a new `429` entry under this node.
                 location=child(op.location, "responses"),
-                snippet=snippet(declared) if declared else snippet("(no responses declared)"),
+                snippet=snippet(message),
                 clause_id="NCSC-004",
                 rule_type=RuleType.DETERMINISTIC,
             )

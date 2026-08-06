@@ -106,7 +106,10 @@ def check(spec: LoadedSpec) -> list[Finding]:
                 # the media-type entry, e.g.
                 # $.paths['/v1/users'].get.responses['200'].content['application/xml']
                 location=content.location,
-                snippet=snippet(content.media_type),
+                snippet=snippet(
+                    f"response media type is {content.media_type} — "
+                    f"GDS mandates JSON (application/json or a +json subtype)"
+                ),
                 clause_id="GDS-004",
                 rule_type=RuleType.DETERMINISTIC,
             )

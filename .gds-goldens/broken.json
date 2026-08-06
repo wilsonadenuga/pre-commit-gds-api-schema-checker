@@ -1,0 +1,97 @@
+{
+  "findings": [
+    {
+      "clause_id": "GDS-001",
+      "location": "$.servers[0].url",
+      "rule_id": "GDS-001",
+      "rule_type": "deterministic",
+      "severity": "error",
+      "snippet": "http://api.example.gov.uk"
+    },
+    {
+      "clause_id": "GDS-002",
+      "location": "$.paths['/getUserList'].post.requestBody.content['application/json'].schema.properties.createdOn",
+      "rule_id": "GDS-002",
+      "rule_type": "deterministic",
+      "severity": "warning",
+      "snippet": "{type, pattern, examples}"
+    },
+    {
+      "clause_id": "GDS-003",
+      "location": "$.paths['/getUserList']",
+      "rule_id": "GDS-003",
+      "rule_type": "deterministic",
+      "severity": "warning",
+      "snippet": "/getUserList"
+    },
+    {
+      "clause_id": "GDS-004",
+      "location": "$.paths['/getUserList'].get.responses['200'].content['application/xml']",
+      "rule_id": "GDS-004",
+      "rule_type": "deterministic",
+      "severity": "warning",
+      "snippet": "application/xml"
+    },
+    {
+      "clause_id": "GDS-005",
+      "location": "$.paths['/getUserList'].post.responses['500'].content['application/json']",
+      "rule_id": "GDS-005",
+      "rule_type": "deterministic",
+      "severity": "warning",
+      "snippet": "{type, properties}"
+    },
+    {
+      "clause_id": "NCSC-001",
+      "location": "$.components.securitySchemes.basicAuth",
+      "rule_id": "NCSC-001",
+      "rule_type": "deterministic",
+      "severity": "error",
+      "snippet": "{type, scheme}"
+    },
+    {
+      "clause_id": "NCSC-002",
+      "location": "$.paths['/getUserList'].get.security",
+      "rule_id": "NCSC-002",
+      "rule_type": "deterministic",
+      "severity": "error",
+      "snippet": "security: [] on GET /getUserList — explicit opt-out"
+    },
+    {
+      "clause_id": "NCSC-003",
+      "location": "$.paths['/getUserList'].post.requestBody.content['application/json'].schema",
+      "rule_id": "NCSC-003",
+      "rule_type": "deterministic",
+      "severity": "warning",
+      "snippet": "missing additionalProperties: false at request-body root"
+    },
+    {
+      "clause_id": "NCSC-004",
+      "location": "$.paths['/getUserList'].post.responses",
+      "rule_id": "NCSC-004",
+      "rule_type": "deterministic",
+      "severity": "suggestion",
+      "snippet": "201, 500"
+    },
+    {
+      "clause_id": "REC-001",
+      "location": "$.paths['/getUserList']",
+      "rule_id": "REC-001",
+      "rule_type": "deterministic",
+      "severity": "suggestion",
+      "snippet": "path is not kebab-case (contains uppercase or underscore); verb in path — put verbs in the HTTP method, not the URI: /g…"
+    },
+    {
+      "clause_id": "REC-002",
+      "location": "$.paths['/getUserList'].get",
+      "rule_id": "REC-002",
+      "rule_type": "deterministic",
+      "severity": "suggestion",
+      "snippet": "summary missing; description missing"
+    }
+  ],
+  "openapi_version": "3.1.0",
+  "rules_run": 11,
+  "spec": "examples/broken.yaml",
+  "suggestions": [],
+  "swagger_version": null
+}

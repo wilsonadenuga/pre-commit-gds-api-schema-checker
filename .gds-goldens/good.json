@@ -1,0 +1,8 @@
+{
+  "findings": [],
+  "openapi_version": "3.1.0",
+  "rules_run": 11,
+  "spec": "examples/good.yaml",
+  "suggestions": [],
+  "swagger_version": null
+}

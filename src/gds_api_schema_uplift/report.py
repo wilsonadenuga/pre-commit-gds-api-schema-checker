@@ -94,8 +94,16 @@ def render_text(
     standards: Standards | None = None,
     suggestions: Sequence[Suggestion] = (),
     console: Console | None = None,
+    *,
+    include_suggestions: bool = True,
 ) -> None:
-    """Print the human-facing report."""
+    """Print the human-facing report.
+
+    `include_suggestions=False` renders findings only, leaving suggestions for
+    the caller to display. Phase 4's interactive approval loop uses that path
+    so the loop can render each suggestion inline against a prompt, rather
+    than having them printed twice — once here, once by the loop.
+    """
     console = console or Console()
     console.print(f"[bold]{spec.path}[/bold]  [dim]({spec.version_label})[/dim]")
 
@@ -129,7 +137,8 @@ def render_text(
         f"{counts[Severity.SUGGESTION]} suggestion"
     )
     _print_ruleset_note(console, standards)
-    render_suggestions(suggestions, console)
+    if include_suggestions:
+        render_suggestions(suggestions, console)
 
 
 def _print_ruleset_note(console: Console, standards: Standards | None) -> None:

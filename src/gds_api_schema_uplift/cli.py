@@ -1,8 +1,9 @@
 """Typer entrypoint.
 
-Phase 0 wires the flags and the load → rule pass → report path. The rule registry is
-empty, the agent is not called, and nothing is written to disk. Later phases fill in
-the middle without changing this shape.
+Phase 4 adds the interactive approval loop: findings run → agent proposes patches
+→ developer approves each patch one at a time → approved patches are written
+back with a `.bak` alongside. The path from spec to report is unchanged; the
+new machinery lives in `approval.py` behind `--no-apply` / interactive mode.
 """
 
 from __future__ import annotations
@@ -98,6 +99,16 @@ def check(
             help="Cap agent calls per run (PRD s11 cost mitigation).",
         ),
     ] = 5,
+    no_apply: Annotated[
+        bool,
+        typer.Option(
+            "--no-apply",
+            help=(
+                "Report-only mode: print findings and suggestions, never prompt "
+                "or write to disk. Implied by --format=json."
+            ),
+        ),
+    ] = False,
     standards_path: Annotated[
         Path | None,
         typer.Option("--standards", help="Override the standards.yaml path."),
@@ -167,12 +178,60 @@ def check(
 
     if output_format is OutputFormat.JSON:
         console.print_json(render_json(spec, findings, standards, suggestions))
-    else:
-        render_text(spec, findings, standards, suggestions, console=console)
-        if agent_run is not None:
-            agent_run.cost.render(console)
+        raise typer.Exit(EXIT_FINDINGS if findings else EXIT_OK)
 
-    raise typer.Exit(EXIT_FINDINGS if findings else EXIT_OK)
+    # Interactive mode is the default; --no-apply and --format=json opt into
+    # report-only. When we're going to prompt, render_text omits the suggestion
+    # block so the approval loop can render each one against its prompt rather
+    # than printing them twice.
+    interactive = _should_run_approval_loop(
+        suggestions=suggestions,
+        no_apply=no_apply,
+    )
+    render_text(
+        spec,
+        findings,
+        standards,
+        suggestions,
+        console=console,
+        include_suggestions=not interactive,
+    )
+    if agent_run is not None:
+        agent_run.cost.render(console)
+
+    exit_code = EXIT_FINDINGS if findings else EXIT_OK
+    if interactive:
+        from .approval import ApprovalSession
+
+        session = ApprovalSession(spec, standards, console)
+        outcome = session.run(suggestions)
+        if outcome.any_writes:
+            # The file on disk has been mutated by approvals; the original
+            # `findings` list no longer reflects reality. Re-run the
+            # deterministic pass to give an accurate exit code — a developer
+            # who approved every fix should not be told the spec is still
+            # dirty.
+            fresh_findings = run_deterministic_pass(session.spec)
+            exit_code = EXIT_FINDINGS if fresh_findings else EXIT_OK
+
+    raise typer.Exit(exit_code)
+
+
+def _should_run_approval_loop(
+    *,
+    suggestions: list[Suggestion],
+    no_apply: bool,
+) -> bool:
+    """True when we should enter the interactive approval loop.
+
+    Centralised because three conditions have to line up: `--no-apply` off, at
+    least one offered suggestion in hand, and the agent actually produced a
+    patch that survived the validation gate. A JSON caller never reaches this
+    path — that exit ran earlier.
+    """
+    if no_apply:
+        return False
+    return any(s.offered and s.patch is not None for s in suggestions)
 
 
 def _run_agent(

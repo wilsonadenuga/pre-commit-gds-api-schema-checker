@@ -142,11 +142,24 @@ def _entry_points(data: Any) -> list[SchemaRef]:
     return roots
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+properties:
+  createdAt:
+    type: string
+    format: date-time
+  dateOfBirth:
+    type: string
+    format: date
+"""
+
+
 @register(
     "GDS-002",
     severity=Severity.WARNING,
     clause_id="GDS-002",
     summary="Dates and times must be ISO 8601 strings (format: date, date-time or time)",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Find date/time-named string properties that declare no ISO 8601 format."""

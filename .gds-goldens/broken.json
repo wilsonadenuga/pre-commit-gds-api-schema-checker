@@ -111,6 +111,19 @@
       "snippet": "summary missing; description missing"
     }
   ],
+  "good_examples": {
+    "GDS-001": "servers:\n  - url: https://api.example.gov.uk/v1\n    description: Production\n",
+    "GDS-002": "properties:\n  createdAt:\n    type: string\n    format: date-time\n  dateOfBirth:\n    type: string\n    format: date\n",
+    "GDS-003": "paths:\n  /v1/users:\n    get:\n      responses:\n        '200': {...}\n",
+    "GDS-004": "responses:\n  '200':\n    description: OK\n    content:\n      application/json:\n        schema:\n          $ref: '#/components/schemas/User'\n",
+    "GDS-005": "responses:\n  '500':\n    description: Server error\n    content:\n      application/problem+json:\n        schema:\n          $ref: '#/components/schemas/Problem'\n",
+    "NCSC-001": "components:\n  securitySchemes:\n    departmentOAuth:\n      type: oauth2\n      flows:\n        clientCredentials:\n          tokenUrl: https://auth.example.gov.uk/token\n          scopes: {}\n",
+    "NCSC-002": "security:\n  - departmentOAuth: []\npaths:\n  /v1/users:\n    get:\n      # No operation-level `security` \u2014 inherits the root requirement.\n      responses:\n        '200': {...}\n",
+    "NCSC-003": "requestBody:\n  required: true\n  content:\n    application/json:\n      schema:\n        type: object\n        additionalProperties: false\n        properties:\n          name: {type: string}\n",
+    "NCSC-004": "responses:\n  '200': {...}\n  '429':\n    description: Too Many Requests\n    content:\n      application/problem+json:\n        schema:\n          $ref: '#/components/schemas/Problem'\n",
+    "REC-001": "paths:\n  /v1/users:              # kebab-case, plural noun\n    get: {...}\n  /v1/user-preferences:   # multi-word segments join with a hyphen\n    get: {...}\n",
+    "REC-002": "paths:\n  /v1/users:\n    get:\n      summary: List users\n      description: |\n        Returns a paginated list of users visible to the caller.\n        Filterable by department and status.\n"
+  },
   "openapi_version": "3.1.0",
   "rules_run": 11,
   "spec": "examples/broken.yaml",

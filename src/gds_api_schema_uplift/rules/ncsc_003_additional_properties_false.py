@@ -176,11 +176,26 @@ def _has_additional_properties_false(schema: dict[str, Any]) -> bool:
     return schema.get("additionalProperties") is False
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        additionalProperties: false
+        properties:
+          name: {type: string}
+"""
+
+
 @register(
     "NCSC-003",
     severity=Severity.WARNING,
     clause_id="NCSC-003",
     summary="Request bodies set additionalProperties: false",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Flag each JSON request-body root schema that permits extra properties."""

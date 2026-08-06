@@ -12,6 +12,7 @@ from collections.abc import Sequence
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.table import Table
 
 from .contracts import Authority, Finding, Severity, Suggestion
@@ -41,6 +42,57 @@ def _clause_cell(finding: Finding, standards: Standards | None) -> str:
     if clause.authority is Authority.RECOMMENDATION:
         label += " [dim](recommendation, not GDS-mandated)[/dim]"
     return label
+
+
+def render_good_examples(findings: Sequence[Finding], console: Console) -> None:
+    """Render one "How to fix" panel per distinct rule id that fired.
+
+    Grouping by rule id means `GDS-002` firing on three date-named fields
+    produces one example panel — the fix pattern is the same regardless of
+    how many places it applies. Ordering is by rule id so the panels line up
+    with the report table above and the goldens stay stable.
+
+    Silent when there are no findings: nothing to fix, nothing to show.
+    """
+    from .rules import REGISTRY
+
+    if not findings:
+        return
+
+    seen: list[str] = []
+    for finding in findings:
+        if finding.rule_id in seen:
+            continue
+        if finding.rule_id not in REGISTRY:
+            continue
+        seen.append(finding.rule_id)
+
+    if not seen:
+        return
+
+    console.print()
+    for rule_id in sorted(seen):
+        rule = REGISTRY[rule_id]
+        # Rich's Syntax highlighter renders the YAML with colours in a real
+        # terminal and degrades gracefully to plain text under CliRunner.
+        yaml_block = Syntax(
+            rule.good_example.rstrip(),
+            "yaml",
+            theme="ansi_dark",
+            background_color="default",
+        )
+        body = Table.grid(padding=(0, 0))
+        body.add_row(f"[dim]{rule.summary}[/dim]")
+        body.add_row("")
+        body.add_row(yaml_block)
+        console.print(
+            Panel(
+                body,
+                title=f"How to fix — {rule_id}",
+                border_style="dim",
+                title_align="left",
+            )
+        )
 
 
 def render_suggestions(
@@ -143,6 +195,7 @@ def render_text(
         f"{counts[Severity.SUGGESTION]} suggestion"
     )
     _print_ruleset_note(console, standards)
+    render_good_examples(findings, console)
     if include_suggestions:
         render_suggestions(suggestions, console)
 
@@ -180,6 +233,11 @@ def render_json(
         "openapi_version": spec.openapi_version,
         "swagger_version": spec.swagger_version,
         "rules_run": _rules_run(),
+        # Fix examples keyed by rule id, deduped, for the rules that fired.
+        # Top-level (not per-finding) keeps the JSON small — three findings
+        # from the same rule share one example — and matches the text
+        # renderer's "one panel per rule" grouping.
+        "good_examples": _good_examples_for(findings),
         "suggestions": [
             {
                 "rule_id": s.finding.rule_id,
@@ -214,3 +272,22 @@ def _rules_run() -> int:
     from .rules import REGISTRY
 
     return len(REGISTRY)
+
+
+def _good_examples_for(findings: Sequence[Finding]) -> dict[str, str]:
+    """Deduped map of `rule_id → good_example` for the rules that fired.
+
+    Sorted key order (as inserted via sorted()) gives stable JSON output for
+    goldens. Falls back to an empty dict when there are no findings, matching
+    the text renderer's silent-when-clean behaviour.
+    """
+    from .rules import REGISTRY
+
+    seen: set[str] = set()
+    result: dict[str, str] = {}
+    for rule_id in sorted({f.rule_id for f in findings}):
+        if rule_id in seen or rule_id not in REGISTRY:
+            continue
+        seen.add(rule_id)
+        result[rule_id] = REGISTRY[rule_id].good_example
+    return result

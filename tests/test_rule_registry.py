@@ -41,6 +41,17 @@ def test_every_rule_declares_a_clause_id_and_summary():
         assert rule.summary, f"{rule_id} declares no summary"
 
 
+def test_every_rule_declares_a_good_example():
+    """Companion to the clause/summary check — every rule must ship a fix example.
+
+    Detailed content assertions (valid YAML, size cap, etc.) live in
+    `test_good_examples.py`; this test's job is only to keep the registry
+    metadata frozen so a new rule cannot land without one.
+    """
+    for rule_id, rule in REGISTRY.items():
+        assert rule.good_example, f"{rule_id} declares no good_example"
+
+
 def test_registered_severities_match_the_prd_ruleset_table():
     """PRD s7.2: errors are hard rules with security stakes; warnings are hard
     rules with quality/consistency stakes; suggestions are the low-severity

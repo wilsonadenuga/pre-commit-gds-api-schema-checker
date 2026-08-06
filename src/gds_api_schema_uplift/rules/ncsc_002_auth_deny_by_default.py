@@ -77,11 +77,25 @@ def _has_non_empty_requirement(security: Any) -> bool:
     return False
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+security:
+  - departmentOAuth: []
+paths:
+  /v1/users:
+    get:
+      # No operation-level `security` — inherits the root requirement.
+      responses:
+        '200': {...}
+"""
+
+
 @register(
     "NCSC-002",
     severity=Severity.ERROR,
     clause_id="NCSC-002",
     summary="Auth declared for every operation (deny by default)",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Flag operations that have no effective, non-empty security requirement."""

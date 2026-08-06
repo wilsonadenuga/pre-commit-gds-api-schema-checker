@@ -187,11 +187,24 @@ def _first_failing_json_body(response: ResponseRef, data: Any) -> ContentRef | N
     return None
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+responses:
+  '500':
+    description: Server error
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/components/schemas/Problem'
+"""
+
+
 @register(
     "GDS-005",
     severity=Severity.WARNING,
     clause_id="GDS-005",
     summary="Error responses must use a consistent documented shape (RFC 9457 problem+json)",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Flag ad-hoc error bodies and non-standard error status codes."""

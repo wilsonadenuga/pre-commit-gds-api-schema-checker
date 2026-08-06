@@ -71,11 +71,22 @@ def _versioning_lives_in_servers(data: Any) -> bool:
     return bool(servers) and all(_server_url_is_versioned(server) for server in servers)
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+paths:
+  /v1/users:
+    get:
+      responses:
+        '200': {...}
+"""
+
+
 @register(
     "GDS-003",
     severity=Severity.WARNING,
     clause_id="GDS-003",
     summary="API version must be declared in the URI path (e.g. /v1/...)",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Flag each path entry that carries no version segment."""

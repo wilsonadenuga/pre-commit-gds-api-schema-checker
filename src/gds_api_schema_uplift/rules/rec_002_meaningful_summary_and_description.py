@@ -152,11 +152,24 @@ def _reasons(operation: dict[str, Any], path: str) -> list[str]:
     return reasons
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+paths:
+  /v1/users:
+    get:
+      summary: List users
+      description: |
+        Returns a paginated list of users visible to the caller.
+        Filterable by department and status.
+"""
+
+
 @register(
     "REC-002",
     severity=Severity.SUGGESTION,
     clause_id="REC-002",
     summary="Operations declare a meaningful summary and description (recommendation)",
+    good_example=GOOD_EXAMPLE,
     rule_type=RuleType.DETERMINISTIC,
 )
 def check(spec: LoadedSpec) -> list[Finding]:

@@ -77,11 +77,24 @@ def _is_allowed_non_json(media_type: str) -> bool:
     return base in _ALLOWED_NON_JSON or base.startswith(_ALLOWED_NON_JSON_PREFIXES)
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+responses:
+  '200':
+    description: OK
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/User'
+"""
+
+
 @register(
     "GDS-004",
     severity=Severity.WARNING,
     clause_id="GDS-004",
     summary="Response bodies must be JSON (application/json or a +json media type)",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Flag each response media type that is neither JSON nor an allowed download."""

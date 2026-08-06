@@ -80,11 +80,25 @@ def _acknowledges_rate_limit(responses: dict) -> bool:
     return False
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+responses:
+  '200': {...}
+  '429':
+    description: Too Many Requests
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/components/schemas/Problem'
+"""
+
+
 @register(
     "NCSC-004",
     severity=Severity.SUGGESTION,
     clause_id="NCSC-004",
     summary="Rate limiting acknowledged: 429 response defined on every operation",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Flag each operation whose `responses` block declares no `429`."""

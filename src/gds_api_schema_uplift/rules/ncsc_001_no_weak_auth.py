@@ -83,11 +83,25 @@ def _is_weak_scheme(scheme: dict[str, Any]) -> bool:
     return False
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+components:
+  securitySchemes:
+    departmentOAuth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example.gov.uk/token
+          scopes: {}
+"""
+
+
 @register(
     "NCSC-001",
     severity=Severity.ERROR,
     clause_id="NCSC-001",
     summary="No basic-auth and no bare apiKey auth schemes",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Flag each `components.securitySchemes` entry that is basic or apiKey."""

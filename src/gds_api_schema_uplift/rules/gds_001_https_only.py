@@ -47,11 +47,20 @@ def _is_compliant(url: str) -> bool:
     return match.group("scheme").lower() == "https"  # schemes are case-insensitive
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+servers:
+  - url: https://api.example.gov.uk/v1
+    description: Production
+"""
+
+
 @register(
     "GDS-001",
     severity=Severity.ERROR,
     clause_id="GDS-001",
     summary="HTTPS-only: every declared server URL must use https://",
+    good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
     """Flag each root `servers` entry whose `url` declares a non-HTTPS scheme."""

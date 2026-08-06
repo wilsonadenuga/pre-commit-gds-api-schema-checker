@@ -199,11 +199,22 @@ def _describe(path: str) -> str | None:
     return f"{'; '.join(reasons)}: {path}"
 
 
+#: The compliant shape, rendered by the report's "How to fix" section.
+GOOD_EXAMPLE = """\
+paths:
+  /v1/users:              # kebab-case, plural noun
+    get: {...}
+  /v1/user-preferences:   # multi-word segments join with a hyphen
+    get: {...}
+"""
+
+
 @register(
     "REC-001",
     severity=Severity.SUGGESTION,
     clause_id="REC-001",
     summary="Paths use kebab-case, plural nouns (recommendation)",
+    good_example=GOOD_EXAMPLE,
     rule_type=RuleType.DETERMINISTIC,
 )
 def check(spec: LoadedSpec) -> list[Finding]:

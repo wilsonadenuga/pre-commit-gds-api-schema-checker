@@ -24,6 +24,8 @@ RULES_WITH_A_FIXTURE_VIOLATION = (
     "NCSC-002",
     "NCSC-003",
     "NCSC-004",
+    "REC-001",
+    "REC-002",
 )
 
 
@@ -34,9 +36,9 @@ def broken_findings():
 # --- M1: detection and zero false positives -------------------------------------------
 
 def test_broken_spec_meets_the_m1_detection_threshold():
-    """M1: at least 9 distinct violations on the non-compliant spec (v0.2 hard rules)."""
+    """M1: at least 11 distinct violations on the non-compliant spec (v0.2 complete: 9 hard + 2 REC)."""
     findings = broken_findings()
-    assert len(findings) >= 9, [f.rule_id for f in findings]
+    assert len(findings) >= 11, [f.rule_id for f in findings]
 
 
 def test_good_spec_has_zero_false_positives():
@@ -59,10 +61,44 @@ def test_each_rule_fires_exactly_once_on_the_broken_spec():
 
 # --- no overlap between rules ----------------------------------------------------------
 
-def test_no_two_rules_claim_the_same_location():
-    """Overlapping rules would double-charge the developer for one mistake."""
-    locations = [f.location for f in broken_findings()]
-    assert len(locations) == len(set(locations)), locations
+def test_no_rule_double_reports_at_the_same_location():
+    """A single rule must not emit two findings at the same JSONPath.
+
+    Earlier this test asserted no *cross-rule* overlap at all — but that's too
+    strict once REC-* lands: `/getUserList` in broken.yaml is genuinely three
+    orthogonal mistakes (missing /v1/ per GDS-003, camelCase per REC-001, and
+    the verb-in-path + singular pieces of REC-001). Different rules flagging
+    the same path for different reasons is honest, not double-charging.
+
+    The invariant this test still guards is per-rule: a rule that emits two
+    findings at the same location is double-reporting for one violation and
+    would count wrong in the fixture-contract test.
+    """
+    seen: dict[tuple[str, str], int] = {}
+    for finding in broken_findings():
+        key = (finding.rule_id, finding.location)
+        seen[key] = seen.get(key, 0) + 1
+    duplicates = {k: v for k, v in seen.items() if v > 1}
+    assert not duplicates, duplicates
+
+
+def test_cross_rule_overlaps_are_only_the_expected_ones():
+    """Cross-rule location overlaps are allowed but tightly enumerated.
+
+    The current allowed overlap is GDS-003 (URI path versioning) + REC-001
+    (kebab-case, plural nouns) both pointing at the offending path. Any *new*
+    overlap that appears here is likely a rule aiming too broadly and should
+    be tightened.
+    """
+    from collections import defaultdict
+
+    by_location: dict[str, set[str]] = defaultdict(set)
+    for finding in broken_findings():
+        by_location[finding.location].add(finding.rule_id)
+    overlaps = {loc: sorted(rules) for loc, rules in by_location.items() if len(rules) > 1}
+    assert overlaps == {
+        "$.paths['/getUserList']": ["GDS-003", "REC-001"],
+    }, overlaps
 
 
 def test_findings_are_ordered_by_rule_id():

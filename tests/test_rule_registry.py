@@ -10,8 +10,7 @@ from __future__ import annotations
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.rules import REGISTRY, deterministic_rules, llm_rules
 
-#: Every rule expected to be registered right now. Phase 5b adds REC-001/002 —
-#: extend this list then.
+#: Every rule expected to be registered. The v0.2 ruleset is complete at 11 rules.
 EXPECTED_RULES = (
     "GDS-001",
     "GDS-002",
@@ -22,6 +21,8 @@ EXPECTED_RULES = (
     "NCSC-002",
     "NCSC-003",
     "NCSC-004",
+    "REC-001",
+    "REC-002",
 )
 
 
@@ -41,12 +42,15 @@ def test_every_rule_declares_a_clause_id_and_summary():
 
 
 def test_registered_severities_match_the_prd_ruleset_table():
-    """PRD s7.2: GDS-001 + NCSC-001/002 are errors, most are warnings, NCSC-004 is suggestion."""
+    """PRD s7.2: errors are hard rules with security stakes; warnings are hard
+    rules with quality/consistency stakes; suggestions are the low-severity
+    NCSC-004 plus both REC-* recommendations."""
     for rule_id in ("GDS-001", "NCSC-001", "NCSC-002"):
         assert REGISTRY[rule_id].severity is Severity.ERROR, rule_id
     for rule_id in ("GDS-002", "GDS-003", "GDS-004", "GDS-005", "NCSC-003"):
         assert REGISTRY[rule_id].severity is Severity.WARNING, rule_id
-    assert REGISTRY["NCSC-004"].severity is Severity.SUGGESTION
+    for rule_id in ("NCSC-004", "REC-001", "REC-002"):
+        assert REGISTRY[rule_id].severity is Severity.SUGGESTION, rule_id
 
 
 def test_every_current_rule_is_deterministic():

@@ -8,8 +8,8 @@ side effect — importing `gds_api_schema_uplift.rules` must be enough to popula
 Rule modules are named `<rule_id>_<what_it_checks>` so the filename says what the
 rule does and the directory still sorts by rule id.
 
-Phase 1 lands `GDS-001`–`GDS-005`. Phase 5a adds `NCSC-001`–`NCSC-004`; Phase 5b adds
-`REC-001`/`REC-002`.
+Phase 1 lands `GDS-001`–`GDS-005`; Phase 5a adds `NCSC-001`–`NCSC-004`; Phase 5b adds
+`REC-001`/`REC-002` (v0.2 ruleset complete).
 """
 
 from __future__ import annotations
@@ -47,3 +47,5 @@ from . import ncsc_001_no_weak_auth  # noqa: E402,F401
 from . import ncsc_002_auth_deny_by_default  # noqa: E402,F401
 from . import ncsc_003_additional_properties_false  # noqa: E402,F401
 from . import ncsc_004_rate_limit_declared  # noqa: E402,F401
+from . import rec_001_kebab_case_plural_paths  # noqa: E402,F401
+from . import rec_002_meaningful_summary_and_description  # noqa: E402,F401

@@ -14,7 +14,17 @@ from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules import REGISTRY, run_deterministic_pass
 
 #: Rules expected to fire exactly once each on broken.yaml.
-RULES_WITH_A_FIXTURE_VIOLATION = ("GDS-001", "GDS-002", "GDS-003", "GDS-004", "GDS-005")
+RULES_WITH_A_FIXTURE_VIOLATION = (
+    "GDS-001",
+    "GDS-002",
+    "GDS-003",
+    "GDS-004",
+    "GDS-005",
+    "NCSC-001",
+    "NCSC-002",
+    "NCSC-003",
+    "NCSC-004",
+)
 
 
 def broken_findings():
@@ -24,9 +34,9 @@ def broken_findings():
 # --- M1: detection and zero false positives -------------------------------------------
 
 def test_broken_spec_meets_the_m1_detection_threshold():
-    """M1: at least 5 distinct violations on the non-compliant spec."""
+    """M1: at least 9 distinct violations on the non-compliant spec (v0.2 hard rules)."""
     findings = broken_findings()
-    assert len(findings) >= 5, [f.rule_id for f in findings]
+    assert len(findings) >= 9, [f.rule_id for f in findings]
 
 
 def test_good_spec_has_zero_false_positives():

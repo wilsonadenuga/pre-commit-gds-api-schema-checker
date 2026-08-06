@@ -108,10 +108,13 @@ def test_text_report_shows_rule_severity_and_location():
 
 
 def test_text_report_summarises_counts_by_severity():
+    """v0.2 ruleset breakdown on broken.yaml: 3 errors (GDS-001, NCSC-001, NCSC-002),
+    5 warnings (GDS-002..005 + NCSC-003), 1 suggestion (NCSC-004)."""
     result = runner.invoke(app, [str(BROKEN_SPEC)])
-    assert "5 finding(s)" in result.output
-    assert "1 error" in result.output
-    assert "4 warning" in result.output
+    assert "9 finding(s)" in result.output
+    assert "3 error" in result.output
+    assert "5 warning" in result.output
+    assert "1 suggestion" in result.output
 
 
 def test_report_resolves_citations_now_the_corpus_is_authored():
@@ -167,7 +170,7 @@ def test_json_report_on_a_clean_spec():
     assert result.exit_code == EXIT_OK, result.output
     payload = json.loads(result.output)
     assert payload["findings"] == []
-    assert payload["rules_run"] == 5
+    assert payload["rules_run"] == 9
     assert payload["openapi_version"] == "3.1.0"
 
 
@@ -175,7 +178,7 @@ def test_json_report_carries_every_finding_contract_field():
     result = runner.invoke(app, [str(BROKEN_SPEC), "--format", "json"])
     assert result.exit_code == EXIT_FINDINGS
     payload = json.loads(result.output)
-    assert len(payload["findings"]) == 5
+    assert len(payload["findings"]) == 9
     for finding in payload["findings"]:
         assert set(finding) == {
             "rule_id",

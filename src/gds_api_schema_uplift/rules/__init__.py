@@ -43,3 +43,7 @@ from . import gds_002_iso8601_datetimes  # noqa: E402,F401
 from . import gds_003_uri_path_versioning  # noqa: E402,F401
 from . import gds_004_json_response_bodies  # noqa: E402,F401
 from . import gds_005_problem_details_errors  # noqa: E402,F401
+from . import ncsc_001_no_weak_auth  # noqa: E402,F401
+from . import ncsc_002_auth_deny_by_default  # noqa: E402,F401
+from . import ncsc_003_additional_properties_false  # noqa: E402,F401
+from . import ncsc_004_rate_limit_declared  # noqa: E402,F401

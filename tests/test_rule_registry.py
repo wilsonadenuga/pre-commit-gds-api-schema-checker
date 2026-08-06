@@ -10,9 +10,19 @@ from __future__ import annotations
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.rules import REGISTRY, deterministic_rules, llm_rules
 
-#: Every rule expected to be registered right now. Phase 5a adds NCSC-001..004 and
-#: Phase 5b adds REC-001/002 — extend this list then.
-EXPECTED_RULES = ("GDS-001", "GDS-002", "GDS-003", "GDS-004", "GDS-005")
+#: Every rule expected to be registered right now. Phase 5b adds REC-001/002 —
+#: extend this list then.
+EXPECTED_RULES = (
+    "GDS-001",
+    "GDS-002",
+    "GDS-003",
+    "GDS-004",
+    "GDS-005",
+    "NCSC-001",
+    "NCSC-002",
+    "NCSC-003",
+    "NCSC-004",
+)
 
 
 def test_registry_holds_exactly_the_expected_ruleset():
@@ -31,10 +41,12 @@ def test_every_rule_declares_a_clause_id_and_summary():
 
 
 def test_registered_severities_match_the_prd_ruleset_table():
-    """PRD s7.2: GDS-001 is an error; GDS-002..005 are warnings."""
-    assert REGISTRY["GDS-001"].severity is Severity.ERROR
-    for rule_id in ("GDS-002", "GDS-003", "GDS-004", "GDS-005"):
+    """PRD s7.2: GDS-001 + NCSC-001/002 are errors, most are warnings, NCSC-004 is suggestion."""
+    for rule_id in ("GDS-001", "NCSC-001", "NCSC-002"):
+        assert REGISTRY[rule_id].severity is Severity.ERROR, rule_id
+    for rule_id in ("GDS-002", "GDS-003", "GDS-004", "GDS-005", "NCSC-003"):
         assert REGISTRY[rule_id].severity is Severity.WARNING, rule_id
+    assert REGISTRY["NCSC-004"].severity is Severity.SUGGESTION
 
 
 def test_every_current_rule_is_deterministic():

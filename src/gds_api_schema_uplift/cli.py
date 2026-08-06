@@ -21,8 +21,9 @@ from .agent.prompts import build_system_blocks, cache_warning
 from .contracts import Suggestion
 from .loader import SpecLoadError, SpecVersionRejected, load_spec, version_gate
 from .report import render_json, render_text
-from .rules import run_deterministic_pass
+from .rules import REGISTRY, run_deterministic_pass
 from .standards import StandardsError, default_standards_path, load_standards
+from .telemetry import TelemetryContext, build_telemetry
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle avoidance for type hints only
     from .agent import AgentRun
@@ -159,62 +160,87 @@ def check(
         err.print(f"[red]Could not load standards corpus:[/red] {exc}")
         raise typer.Exit(EXIT_ERROR) from None
 
-    findings = run_deterministic_pass(spec)
-
-    suggestions: list[Suggestion] = []
-    agent_run: AgentRun | None = None
-    if findings and not _llm_disabled(no_llm) and max_llm_calls > 0:
-        agent_run, suggestions = _run_agent(
-            spec=spec,
-            findings=findings,
-            standards=standards,
-            model=model,
-            effort=effort.value,
-            max_llm_calls=max_llm_calls,
-            # Advisory notes go to stderr, but keep the agent quiet under
-            # --format=json so stdout stays parseable for a CI consumer.
-            err=Console(stderr=True, quiet=output_format is OutputFormat.JSON),
+    telemetry = build_telemetry()
+    with telemetry.run(spec=str(spec_path), rules_count=len(REGISTRY)) as tele:
+        tele.event(
+            "RUN", "STARTED", "SPEC",
+            path=str(spec_path),
+            openapi_version=spec.openapi_version,
         )
 
-    if output_format is OutputFormat.JSON:
-        console.print_json(render_json(spec, findings, standards, suggestions))
-        raise typer.Exit(EXIT_FINDINGS if findings else EXIT_OK)
+        with tele.span("rules.deterministic_pass"):
+            findings = run_deterministic_pass(spec)
+        tele.event(
+            "RULES", "COMPLETED", "PASS",
+            findings=len(findings),
+            rule_ids=[f.rule_id for f in findings],
+        )
 
-    # Interactive mode is the default; --no-apply and --format=json opt into
-    # report-only. When we're going to prompt, render_text omits the suggestion
-    # block so the approval loop can render each one against its prompt rather
-    # than printing them twice.
-    interactive = _should_run_approval_loop(
-        suggestions=suggestions,
-        no_apply=no_apply,
-    )
-    render_text(
-        spec,
-        findings,
-        standards,
-        suggestions,
-        console=console,
-        include_suggestions=not interactive,
-    )
-    if agent_run is not None:
-        agent_run.cost.render(console)
+        suggestions: list[Suggestion] = []
+        agent_run: AgentRun | None = None
+        if findings and not _llm_disabled(no_llm) and max_llm_calls > 0:
+            with tele.span("agent.pass", model=model, findings=len(findings)):
+                agent_run, suggestions = _run_agent(
+                    spec=spec,
+                    findings=findings,
+                    standards=standards,
+                    model=model,
+                    effort=effort.value,
+                    max_llm_calls=max_llm_calls,
+                    telemetry=tele,
+                    # Advisory notes go to stderr, but keep the agent quiet
+                    # under --format=json so stdout stays parseable for a CI
+                    # consumer.
+                    err=Console(stderr=True, quiet=output_format is OutputFormat.JSON),
+                )
+            tele.event(
+                "AGENT", "COMPLETED", "PASS",
+                suggestions_offered=sum(1 for s in suggestions if s.offered),
+                suggestions_dropped=sum(1 for s in suggestions if not s.offered),
+            )
 
-    exit_code = EXIT_FINDINGS if findings else EXIT_OK
-    if interactive:
-        from .approval import ApprovalSession
+        if output_format is OutputFormat.JSON:
+            console.print_json(render_json(spec, findings, standards, suggestions))
+            tele.event("RUN", "COMPLETED", "REPORT", format="json")
+            raise typer.Exit(EXIT_FINDINGS if findings else EXIT_OK)
 
-        session = ApprovalSession(spec, standards, console)
-        outcome = session.run(suggestions)
-        if outcome.any_writes:
-            # The file on disk has been mutated by approvals; the original
-            # `findings` list no longer reflects reality. Re-run the
-            # deterministic pass to give an accurate exit code — a developer
-            # who approved every fix should not be told the spec is still
-            # dirty.
-            fresh_findings = run_deterministic_pass(session.spec)
-            exit_code = EXIT_FINDINGS if fresh_findings else EXIT_OK
+        # Interactive mode is the default; --no-apply and --format=json opt
+        # into report-only. When we're going to prompt, render_text omits the
+        # suggestion block so the approval loop can render each one against
+        # its prompt rather than printing them twice.
+        interactive = _should_run_approval_loop(
+            suggestions=suggestions,
+            no_apply=no_apply,
+        )
+        render_text(
+            spec,
+            findings,
+            standards,
+            suggestions,
+            console=console,
+            include_suggestions=not interactive,
+        )
+        if agent_run is not None:
+            agent_run.cost.render(console)
 
-    raise typer.Exit(exit_code)
+        exit_code = EXIT_FINDINGS if findings else EXIT_OK
+        if interactive:
+            from .approval import ApprovalSession
+
+            session = ApprovalSession(spec, standards, console, telemetry=tele)
+            outcome = session.run(suggestions)
+            if outcome.any_writes:
+                # The file on disk has been mutated by approvals; the original
+                # `findings` list no longer reflects reality. Re-run the
+                # deterministic pass to give an accurate exit code — a
+                # developer who approved every fix should not be told the
+                # spec is still dirty.
+                with tele.span("rules.recheck_after_approval"):
+                    fresh_findings = run_deterministic_pass(session.spec)
+                exit_code = EXIT_FINDINGS if fresh_findings else EXIT_OK
+
+        tele.event("RUN", "COMPLETED", "REPORT", exit_code=exit_code)
+        raise typer.Exit(exit_code)
 
 
 def _should_run_approval_loop(
@@ -242,6 +268,7 @@ def _run_agent(
     model: str,
     effort: str,
     max_llm_calls: int,
+    telemetry: TelemetryContext,
     err: Console,
 ) -> tuple[AgentRun | None, list[Suggestion]]:
     """Run the agent pass, degrading to no suggestions rather than failing the run.
@@ -290,6 +317,19 @@ def _run_agent(
             f"[yellow]Note:[/yellow] {run.patches_dropped} proposed patch(es) were "
             f"dropped before display — they failed validation or were malformed."
         )
+
+    # Ship the aggregate LLM cost as an OTel metric — PLAN s6 requires cost
+    # to be visible on a dashboard, not just printed. The `AgentRun.cost`
+    # accumulator carries per-call totals; we sum them here so the metric
+    # matches what `cost.render()` will print seconds later.
+    telemetry.record_cost(
+        run.cost.total_usd,
+        model=model,
+        tokens_in=run.cost.total_input_tokens,
+        tokens_out=run.cost.total_output_tokens,
+        cache_reads=run.cost.total_cache_read_tokens,
+        cache_writes=run.cost.total_cache_write_tokens,
+    )
     return run, suggestions
 
 

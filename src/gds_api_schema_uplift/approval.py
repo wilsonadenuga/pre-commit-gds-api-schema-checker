@@ -29,6 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -37,6 +38,7 @@ from .contracts import Authority, Suggestion
 from .loader import LoadedSpec, load_spec
 from .patching import patched_text, validate_patch
 from .standards import Standards, StandardsError
+from .telemetry import TelemetryContext
 
 #: Actions accepted at the approval prompt. `e` is the Phase 4 cuttable per
 #: PLAN — omitted from the initial ship, its slot preserved by rejecting the
@@ -99,6 +101,8 @@ class ApprovalSession:
         standards: Standards | None,
         console: Console,
         input_fn: Callable[[str], str] | None = None,
+        *,
+        telemetry: TelemetryContext | None = None,
     ) -> None:
         self.spec = spec
         self.standards = standards
@@ -108,8 +112,26 @@ class ApprovalSession:
         # CliRunner get consistent behaviour. Tests that want to canned inputs
         # pass an iterator-backed callable.
         self._input_fn = input_fn or (lambda prompt: console.input(prompt))
+        # Optional so unit tests can construct a session without wiring up a
+        # telemetry context. A missing telemetry means "no events emitted"
+        # rather than "emit to stdout", which is what tests want.
+        self._telemetry = telemetry
         self.outcome = ApprovalOutcome()
         self._backup_written = False
+
+    def _emit(self, verb: str, suggestion: Suggestion, **context: Any) -> None:
+        """Emit a `USER / <verb> / FINDING` event, no-op without telemetry."""
+        if self._telemetry is None:
+            return
+        finding = suggestion.finding
+        self._telemetry.event(
+            "USER", verb, "FINDING",
+            rule_id=finding.rule_id,
+            clause_id=finding.clause_id,
+            severity=finding.severity.value,
+            location=finding.location,
+            **context,
+        )
 
     # -- public entrypoint --------------------------------------------------
 
@@ -161,11 +183,14 @@ class ApprovalSession:
             if key == REJECT:
                 self.outcome.rejected_rule_ids.append(suggestion.finding.rule_id)
                 self.console.print("[dim]Skipped.[/dim]")
+                self._emit("REJECTS", suggestion)
                 return REJECT
             if key == QUIT:
+                self._emit("QUITS", suggestion)
                 return QUIT
             if key == WHY:
                 self._render_full_clause(suggestion)
+                self._emit("INSPECTS", suggestion)
                 continue  # re-prompt without incrementing anything
             if key == EDIT:
                 self.console.print(
@@ -211,6 +236,11 @@ class ApprovalSession:
                 f"[yellow]Cannot apply {rule_id}:[/yellow] earlier edits invalidated "
                 f"this patch ([dim]{result.stage}[/dim]: {result.error}). Skipping."
             )
+            self._emit(
+                "SKIPS_INVALID", suggestion,
+                stage=result.stage,
+                error=result.error,
+            )
             return
 
         if not self._backup_written:
@@ -225,6 +255,7 @@ class ApprovalSession:
         self.spec = load_spec(self.spec.path)
         self.outcome.approved_rule_ids.append(rule_id)
         self.console.print(f"[green]Applied.[/green] {self.spec.path} updated.")
+        self._emit("APPROVES", suggestion)
 
     def _write_backup(self) -> None:
         """Preserve the developer's original file before the first mutation.

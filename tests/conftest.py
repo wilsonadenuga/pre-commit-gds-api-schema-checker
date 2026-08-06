@@ -15,12 +15,26 @@ from __future__ import annotations
 import pytest
 
 from gds_api_schema_uplift.cli import NO_LLM_ENV
+from gds_api_schema_uplift.telemetry import DISABLED_ENV as TELEMETRY_DISABLED_ENV
 
 
 @pytest.fixture(autouse=True)
 def disable_llm_pass(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force the CLI's agent pass off for every test."""
     monkeypatch.setenv(NO_LLM_ENV, "1")
+
+
+@pytest.fixture(autouse=True)
+def disable_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force telemetry off in tests.
+
+    Without this, every CLI test would write to `gds-uplift-events.jsonl` in
+    the working directory and start OTel exporters that print JSON to
+    stdout — polluting `runner.invoke` output and leaving files behind.
+    Tests that exercise the telemetry module inject a hand-built config and
+    do not touch this fixture.
+    """
+    monkeypatch.setenv(TELEMETRY_DISABLED_ENV, "1")
 
 
 @pytest.fixture(autouse=True)

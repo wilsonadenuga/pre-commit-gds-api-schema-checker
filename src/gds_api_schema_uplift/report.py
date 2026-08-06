@@ -115,14 +115,20 @@ def render_text(
     table = Table(show_lines=True, header_style="bold")
     table.add_column("Rule", no_wrap=True)
     table.add_column("Severity", no_wrap=True)
+    table.add_column("Line", no_wrap=True, justify="right")
     table.add_column("Location", overflow="fold")
     table.add_column("Snippet", overflow="fold")
     table.add_column("Citation", overflow="fold")
 
     for finding in findings:
+        # Format line as `Ln`, or dim `–` when the resolver could not find it.
+        # A dedicated column keeps the number visible even when the JSONPath
+        # column wraps hard; a developer's eye lands on it first.
+        line_cell = f"L{finding.line}" if finding.line is not None else "[dim]–[/dim]"
         table.add_row(
             finding.rule_id,
             f"[{SEVERITY_STYLE[finding.severity]}]{finding.severity.value}[/]",
+            line_cell,
             finding.location,
             finding.snippet,
             _clause_cell(finding, standards),
@@ -191,6 +197,8 @@ def render_json(
             {
                 "rule_id": f.rule_id,
                 "severity": f.severity.value,
+                "line": f.line,
+                "column": f.column,
                 "location": f.location,
                 "snippet": f.snippet,
                 "clause_id": f.clause_id,

@@ -54,6 +54,14 @@ class Finding:
     Emitted by the rule engine (PRD s8 flow step 1). `location` is a JSONPath into
     the parsed spec so the renderer can show context and the agent can target a
     patch without re-deriving position.
+
+    `line` and `column` are the 1-indexed source position of the offending key,
+    resolved from the ruamel-tracked line-column data attached to the parsed
+    document. Populated post-hoc by `run_deterministic_pass` rather than by the
+    rule itself — rules stay location-only, and one place (the resolver) owns
+    the walk from JSONPath to source coordinates. Both may be `None` when the
+    resolver cannot find the target (malformed location, hand-built spec dict
+    without ruamel `lc` info); renderers treat `None` as "no line info to show".
     """
 
     rule_id: str
@@ -62,6 +70,8 @@ class Finding:
     snippet: str
     clause_id: str
     rule_type: RuleType
+    line: int | None = None
+    column: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

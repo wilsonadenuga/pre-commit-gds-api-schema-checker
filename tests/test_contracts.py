@@ -33,6 +33,13 @@ def test_authority_values():
 
 
 def test_finding_fields_are_exactly_the_frozen_set():
+    """Freeze the field list — a new field means updating every renderer.
+
+    `line` and `column` were added in Phase 7 for editor-clickable source
+    positions; the resolver populates them post-hoc, and both are optional
+    with a `None` default so a rule can still hand-construct a Finding
+    without knowing about the resolver.
+    """
     assert [f.name for f in dataclasses.fields(Finding)] == [
         "rule_id",
         "severity",
@@ -40,6 +47,8 @@ def test_finding_fields_are_exactly_the_frozen_set():
         "snippet",
         "clause_id",
         "rule_type",
+        "line",
+        "column",
     ]
 
 

@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
+from dataclasses import replace
+
 from ..contracts import Finding, RuleType, Severity
+from ..line_resolver import resolve_line
 from ..loader import LoadedSpec
 
 Checker = Callable[[LoadedSpec], list[Finding]]
@@ -97,11 +100,33 @@ def run_deterministic_pass(spec: LoadedSpec) -> list[Finding]:
     Rules run in sorted rule-id order and each rule's own findings keep their
     emission order, so report output and goldens are stable regardless of the order
     rule modules happen to be imported in.
+
+    Findings are enriched with `(line, column)` from the ruamel line-column
+    data attached to the parsed spec. Rules stay location-only — one place
+    (the resolver) owns the JSONPath-to-source-coordinates walk, so a rule
+    author does not have to know anything about ruamel `.lc` internals.
     """
     findings: list[Finding] = []
     for rule in deterministic_rules():
-        findings.extend(rule.checker(spec))
+        for finding in rule.checker(spec):
+            findings.append(_with_source_position(finding, spec))
     return findings
+
+
+def _with_source_position(finding: Finding, spec: LoadedSpec) -> Finding:
+    """Attach (line, column) if the resolver can find them, else pass through.
+
+    A finding already carrying line info is left alone — a rule that computed
+    a more specific position than the JSONPath resolver could is worth
+    preserving. In practice no rule does this yet, but the guard keeps the
+    door open without a contract change.
+    """
+    if finding.line is not None:
+        return finding
+    line, column = resolve_line(spec.data, finding.location)
+    if line is None:
+        return finding
+    return replace(finding, line=line, column=column)
 
 
 def findings_by_severity(findings: Iterable[Finding]) -> dict[Severity, int]:

@@ -183,12 +183,20 @@ def test_json_report_carries_every_finding_contract_field():
         assert set(finding) == {
             "rule_id",
             "severity",
+            "line",
+            "column",
             "location",
             "snippet",
             "clause_id",
             "rule_type",
         }
         assert finding["rule_type"] == "deterministic"
+        # Every deterministic finding on broken.yaml has a resolvable source
+        # position — the resolver walking the ruamel-parsed spec should land
+        # on the offending key. A missing line here means either a rule
+        # emitted a malformed JSONPath or the resolver regressed.
+        assert isinstance(finding["line"], int) and finding["line"] > 0
+        assert isinstance(finding["column"], int) and finding["column"] > 0
 
 
 def test_json_report_is_machine_parseable_without_the_advisory_notes(tmp_path):

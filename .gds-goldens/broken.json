@@ -2,6 +2,8 @@
   "findings": [
     {
       "clause_id": "GDS-001",
+      "column": 5,
+      "line": 32,
       "location": "$.servers[0].url",
       "rule_id": "GDS-001",
       "rule_type": "deterministic",
@@ -10,6 +12,8 @@
     },
     {
       "clause_id": "GDS-002",
+      "column": 17,
+      "line": 85,
       "location": "$.paths['/getUserList'].post.requestBody.content['application/json'].schema.properties.createdOn",
       "rule_id": "GDS-002",
       "rule_type": "deterministic",
@@ -18,6 +22,8 @@
     },
     {
       "clause_id": "GDS-003",
+      "column": 3,
+      "line": 40,
       "location": "$.paths['/getUserList']",
       "rule_id": "GDS-003",
       "rule_type": "deterministic",
@@ -26,6 +32,8 @@
     },
     {
       "clause_id": "GDS-004",
+      "column": 13,
+      "line": 51,
       "location": "$.paths['/getUserList'].get.responses['200'].content['application/xml']",
       "rule_id": "GDS-004",
       "rule_type": "deterministic",
@@ -34,6 +42,8 @@
     },
     {
       "clause_id": "GDS-005",
+      "column": 13,
+      "line": 101,
       "location": "$.paths['/getUserList'].post.responses['500'].content['application/json']",
       "rule_id": "GDS-005",
       "rule_type": "deterministic",
@@ -42,6 +52,8 @@
     },
     {
       "clause_id": "NCSC-001",
+      "column": 5,
+      "line": 115,
       "location": "$.components.securitySchemes.basicAuth",
       "rule_id": "NCSC-001",
       "rule_type": "deterministic",
@@ -50,6 +62,8 @@
     },
     {
       "clause_id": "NCSC-002",
+      "column": 7,
+      "line": 45,
       "location": "$.paths['/getUserList'].get.security",
       "rule_id": "NCSC-002",
       "rule_type": "deterministic",
@@ -58,6 +72,8 @@
     },
     {
       "clause_id": "NCSC-003",
+      "column": 13,
+      "line": 77,
       "location": "$.paths['/getUserList'].post.requestBody.content['application/json'].schema",
       "rule_id": "NCSC-003",
       "rule_type": "deterministic",
@@ -66,6 +82,8 @@
     },
     {
       "clause_id": "NCSC-004",
+      "column": 7,
+      "line": 91,
       "location": "$.paths['/getUserList'].post.responses",
       "rule_id": "NCSC-004",
       "rule_type": "deterministic",
@@ -74,6 +92,8 @@
     },
     {
       "clause_id": "REC-001",
+      "column": 3,
+      "line": 40,
       "location": "$.paths['/getUserList']",
       "rule_id": "REC-001",
       "rule_type": "deterministic",
@@ -82,6 +102,8 @@
     },
     {
       "clause_id": "REC-002",
+      "column": 5,
+      "line": 41,
       "location": "$.paths['/getUserList'].get",
       "rule_id": "REC-002",
       "rule_type": "deterministic",

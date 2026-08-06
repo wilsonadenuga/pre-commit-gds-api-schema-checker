@@ -224,3 +224,6 @@ Flagged rather than silently resolved — each is a decision for the team:
 6. **Coverage target omitted.** The template sets a 70% coverage bar. The PRD
    specifies snapshot tests and goldens but no coverage number, so none is
    asserted here. Set one if it is being graded.
+
+
+Make sure you do not add yourself as co author in my commits.

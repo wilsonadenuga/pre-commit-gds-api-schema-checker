@@ -9,7 +9,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 SPEC ?= examples/broken.yaml
 
-.PHONY: help setup test demo demo-good demo-otel clean
+.PHONY: help setup test demo demo-good demo-otel docker docker-run clean
 
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -41,6 +41,13 @@ demo-good: ## Run the checker against the compliant fixture (expect zero finding
 demo-otel: ## Run against broken.yaml with telemetry pointed at SigNoz (see signoz/README.md)
 	GDS_UPLIFT_OTEL_ENDPOINT=$${GDS_UPLIFT_OTEL_ENDPOINT:-http://localhost:4318} \
 		$(VENV)/bin/gds-api-schema-uplift $(SPEC)
+
+docker: ## Build the Docker image
+	docker build -t gds-api-schema-uplift:latest .
+
+docker-run: ## Run the checker inside the container against $(SPEC) (mounted read-only)
+	docker run --rm -v "$$(pwd)/$(SPEC):/spec.yaml:ro" \
+		gds-api-schema-uplift:latest /spec.yaml --no-apply
 
 clean: ## Remove the environment and caches
 	rm -rf $(VENV) .pytest_cache

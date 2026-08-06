@@ -11,7 +11,8 @@ the interactive approval loop writes safe backups before mutating anything, and
 the tool is fully observable — traces, structured events, and per-call cost
 metrics can be routed to SigNoz or captured locally as JSON.
 
-See [PLAN.md](PLAN.md) for the phase sequence and [PRD.md](PRD.md) for scope.
+See [PLAN.md](PLAN.md) for the phase sequence, [PRD.md](PRD.md) for scope,
+and [docs/architecture.md](docs/architecture.md) for the diagrams.
 
 ## Quickstart
 

@@ -515,6 +515,27 @@ def test_empty_input_reprompts(tmp_path):
 # --- edit action (deferred) -------------------------------------------------
 
 
+def test_prompt_shows_literal_square_brackets_around_action_keys(tmp_path):
+    """Rich treats `[y]` as a markup tag and strips it unless escaped.
+
+    A regression here shows up as a prompt reading `es / o / hy / uit` — a
+    visible on-screen bug that unit tests using an injected input_fn cannot
+    catch on their own. We render the actual prompt text through a Rich
+    console to a buffer and check the brackets survive.
+    """
+    from rich.console import Console
+
+    from gds_api_schema_uplift.approval import _PROMPT_TEXT
+
+    buffer = io.StringIO()
+    Console(file=buffer, width=200, force_terminal=False).print(_PROMPT_TEXT)
+    output = buffer.getvalue()
+    assert "[y]es" in output
+    assert "[n]o" in output
+    assert "[w]hy" in output
+    assert "[q]uit" in output
+
+
 def test_edit_key_is_recognised_and_refused_not_ignored(tmp_path):
     """`e` is cuttable per PLAN. The keystroke is known, so we refuse it explicitly.
 

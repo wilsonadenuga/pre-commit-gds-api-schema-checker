@@ -14,18 +14,25 @@ Phase 6. Wraps OTel SDK setup behind a `TelemetryContext` that:
 
 ## Exporters
 
-- **console-JSON** (default) — spans and metrics are written to stdout via
-  the OTel SDK's `Console*Exporter`. No network dependency, no daemon
-  required, works in every demo environment including a shaky venue Wi-Fi.
-- **OTLP** — enabled by setting `GDS_UPLIFT_OTEL_ENDPOINT` to an OTLP HTTP
-  collector URL (SigNoz default is `http://localhost:4318`). Both traces
-  and metrics ship to that endpoint via `opentelemetry-exporter-otlp`.
+By default, **OTel is not initialised at all**. The JSONL event log runs
+either way — it is the primary audit trail. OTel exporters spin up only
+when the run has an actual place to send data:
+
+- **OTLP** — set `GDS_UPLIFT_OTEL_ENDPOINT` to an OTLP HTTP collector URL
+  (SigNoz default is `http://localhost:4318`). Traces and metrics ship
+  there via `opentelemetry-exporter-otlp`.
+- **Console JSON** — set `GDS_UPLIFT_OTEL_CONSOLE=1` to write spans and
+  metrics to stdout via the OTel SDK's `Console*Exporter`. This mode is
+  for debugging telemetry itself; it is *not* the default because span
+  JSON interleaves with the CLI report and would trash an interactive
+  approval loop.
 
 ## Kill switch
 
-`GDS_UPLIFT_OTEL_DISABLED=1` returns a `NoOpTelemetry` — every method
-callable, nothing recorded, no imports of the OTel SDK's slow bits. Tests
-set this via conftest, and CI runners can flip it when they must not emit.
+`GDS_UPLIFT_OTEL_DISABLED=1` returns a fully-disabled context — every
+method callable, nothing recorded, no OTel SDK touched, no JSONL file
+opened. Tests default to this via conftest; CI runners can flip it when
+they must not emit at all.
 
 ## Why the JSON-lines event log is separate from OTel
 
@@ -54,6 +61,12 @@ DISABLED_ENV = "GDS_UPLIFT_OTEL_DISABLED"
 #: OTLP HTTP endpoint (e.g. `http://localhost:4318`) — enables the SigNoz path.
 ENDPOINT_ENV = "GDS_UPLIFT_OTEL_ENDPOINT"
 
+#: When set truthy, initialise OTel with **console** exporters — writes spans
+#: and metrics to stdout as JSON. Off by default because an interactive run
+#: with console exporters on is unusable (span JSON interleaves with the
+#: report and the approval prompt). Set this only when debugging telemetry.
+CONSOLE_EXPORT_ENV = "GDS_UPLIFT_OTEL_CONSOLE"
+
 #: Where the structured event log is written. Default is a JSONL file in the
 #: current directory; a dev who tails it during a demo sees the run unfold live.
 EVENTS_PATH_ENV = "GDS_UPLIFT_EVENTS_PATH"
@@ -78,22 +91,42 @@ class TelemetryConfig:
     Built from `TelemetryConfig.from_env()` in the CLI, or hand-constructed in
     tests. Kept as a dataclass so tests can flip one field without threading a
     dozen kwargs through the factory.
+
+    `otel_active` — True when we should initialise OTel exporters — is derived
+    rather than stored so the check "is anything asking for OTel?" is a single
+    truth centralised on the config.
     """
 
     disabled: bool = False
     otlp_endpoint: str | None = None
+    console_export: bool = False
     events_path: Path | None = None
+
+    @property
+    def otel_active(self) -> bool:
+        """True when OTel infrastructure should be initialised for this run.
+
+        OTel only spins up when there is somewhere for its output to land —
+        either an OTLP endpoint (SigNoz) or an explicit request for console
+        exporters (debugging). Otherwise a default `gds-api-schema-uplift`
+        run would splatter span JSON across an interactive terminal.
+        """
+        if self.disabled:
+            return False
+        return bool(self.otlp_endpoint) or self.console_export
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> TelemetryConfig:
-        """Read the three env vars documented in the module docstring."""
+        """Read the four env vars documented in the module docstring."""
         env = env if env is not None else os.environ
         disabled = _is_truthy(env.get(DISABLED_ENV))
         endpoint = env.get(ENDPOINT_ENV) or None
+        console_export = _is_truthy(env.get(CONSOLE_EXPORT_ENV))
         events = env.get(EVENTS_PATH_ENV) or DEFAULT_EVENTS_PATH
         return cls(
             disabled=disabled,
             otlp_endpoint=endpoint,
+            console_export=console_export,
             events_path=Path(events) if not disabled else None,
         )
 
@@ -157,7 +190,12 @@ class TelemetryContext:
         self._active_root_span: Any = None
         self._closed = False
 
-        if not config.disabled:
+        # OTel is only initialised when there is somewhere for spans and
+        # metrics to go. A run with no OTLP endpoint and no console flag
+        # gets the JSONL event log but *no* OTel exporters — that keeps
+        # interactive terminals free of console-export JSON while
+        # preserving the audit trail.
+        if config.otel_active:
             self._initialise_otel()
 
     # -- otel setup ---------------------------------------------------------
@@ -247,8 +285,15 @@ class TelemetryContext:
     # -- root span lifecycle ------------------------------------------------
 
     def start_run(self, *, spec: str, rules_count: int) -> None:
-        """Open the root span for this run. Idempotent — safe to call twice."""
-        if self._config.disabled or self._active_root_span is not None:
+        """Open the root span for this run. Idempotent — safe to call twice.
+
+        No-op when OTel is not initialised (no endpoint, no console flag) —
+        the JSONL event log still records the run implicitly via events,
+        and calling `start_run` on an events-only context must not crash.
+        """
+        if not self._config.otel_active or self._active_root_span is not None:
+            return
+        if self._tracer is None:  # belt-and-braces
             return
         span = self._tracer.start_span(
             "gds-uplift.run",
@@ -262,10 +307,11 @@ class TelemetryContext:
     def span(self, name: str, **attributes: Any) -> Iterator[Any]:
         """Open a child span within the current run.
 
-        No-op when disabled: yields None so callers can write
+        No-op when OTel is not initialised (disabled, or no endpoint /
+        console flag set): yields None so callers can write
         `with telemetry.span(...): ...` unconditionally.
         """
-        if self._config.disabled or self._tracer is None:
+        if self._tracer is None:
             yield None
             return
         with self._tracer.start_as_current_span(name, attributes=attributes) as span:

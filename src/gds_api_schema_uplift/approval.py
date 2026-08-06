@@ -49,7 +49,10 @@ WHY = "w"
 QUIT = "q"
 EDIT = "e"
 
-_PROMPT_TEXT = "Apply this patch? [y]es / [n]o / [w]hy / [q]uit"
+# Backslash-escape the square brackets so Rich renders them literally rather
+# than treating `[y]` as an unknown markup tag and stripping it. The bug this
+# fixes was very visible: the prompt on-screen read "es / o / hy / uit".
+_PROMPT_TEXT = r"Apply this patch? \[y]es / \[n]o / \[w]hy / \[q]uit"
 
 #: Keys we understand at all. Anything outside this set re-prompts.
 _KNOWN_ACTIONS = frozenset({ACCEPT, REJECT, WHY, QUIT, EDIT})

@@ -14,7 +14,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
+
+# Load `.env` from the current working directory if it exists, so a
+# developer can put `ANTHROPIC_API_KEY` or `GDS_UPLIFT_*` values in
+# `.env` (per `.env.example`) and have them picked up automatically —
+# no `set -a; source .env; set +a` dance. Existing shell values win
+# over `.env` values (dotenv's default `override=False`), so a
+# deliberate export always trumps a stale `.env`.
+load_dotenv()
 
 from .agent.client import DEFAULT_MODEL
 from .agent.prompts import build_system_blocks, cache_warning

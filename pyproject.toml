@@ -19,6 +19,10 @@ dependencies = [
     "jsonpatch>=1.33",
     # s9.4 AI layer
     "anthropic>=0.40",
+    # `.env` loading — user's ANTHROPIC_API_KEY and GDS_UPLIFT_* env vars come
+    # from a local .env by convention (see .env.example); auto-load rather
+    # than require a manual `set -a; source .env; set +a`.
+    "python-dotenv>=1.0",
     # s9.6 Observability
     "opentelemetry-sdk>=1.27",
     "opentelemetry-exporter-otlp>=1.27",

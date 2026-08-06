@@ -30,17 +30,32 @@ from gds_api_schema_uplift.telemetry import (
 
 
 def _enabled_config(tmp_path: Path) -> TelemetryConfig:
-    """Configure a live context, but with the events file scoped to tmp_path.
+    """Configure a live context for the JSONL event log only.
 
     Autouse `disable_telemetry` in conftest sets DISABLED_ENV=1 — this helper
-    exists so a test can opt back in without unsetting the fixture and
-    without a real OTLP endpoint. Console-JSON exporters are still built,
-    which means the OTel SDK writes trace + metric JSON to stdout; tests
-    that care about stdout capture that via pytest's `capsys`.
+    exists so a test can opt back in without unsetting the fixture. It does
+    *not* enable OTel exporters, so the SDK does not spin up and there is no
+    stdout pollution. Tests that need the OTel path use `_otel_enabled_config`.
     """
     return TelemetryConfig(
         disabled=False,
         otlp_endpoint=None,
+        events_path=tmp_path / "events.jsonl",
+    )
+
+
+def _otel_enabled_config(tmp_path: Path) -> TelemetryConfig:
+    """Configure a context with OTel exporters initialised.
+
+    Uses the console exporter (writes trace + metric JSON to stdout) — pytest
+    captures stdout for each test so the noise does not leak. An OTLP
+    endpoint would work equally but would try to connect at flush time,
+    which is a network side-effect a test suite should not have.
+    """
+    return TelemetryConfig(
+        disabled=False,
+        otlp_endpoint=None,
+        console_export=True,
         events_path=tmp_path / "events.jsonl",
     )
 
@@ -237,14 +252,14 @@ def test_event_line_is_valid_json(tmp_path):
 # --- cost metric ------------------------------------------------------------
 
 
-def test_record_cost_in_enabled_mode_does_not_raise(tmp_path):
-    """The metric path lives against the real OTel SDK.
+def test_record_cost_in_otel_mode_does_not_raise(tmp_path):
+    """With OTel initialised, record_cost writes to the real meter.
 
     A live collector round-trip is a Phase 7 concern; here we just want to
     know the cost meter was created and can accept an add() call without
     raising against a real Sonnet-priced number.
     """
-    context = TelemetryContext(_enabled_config(tmp_path))
+    context = TelemetryContext(_otel_enabled_config(tmp_path))
     with context.run(spec="x.yaml", rules_count=0):
         context.record_cost(
             0.0147,
@@ -254,6 +269,44 @@ def test_record_cost_in_enabled_mode_does_not_raise(tmp_path):
             cache_reads=0,
             cache_writes=2304,
         )
+
+
+def test_record_cost_is_a_noop_when_otel_is_off(tmp_path):
+    """Without an OTLP endpoint or console flag, no meter is created.
+
+    A cost record still has to be a safe call — the CLI records cost
+    unconditionally, so a config with events-only should not raise.
+    """
+    context = TelemetryContext(_enabled_config(tmp_path))
+    with context.run(spec="x.yaml", rules_count=0):
+        context.record_cost(
+            0.05, model="claude-sonnet-4-6", tokens_in=1000, tokens_out=100
+        )
+
+
+def test_default_config_does_not_initialise_otel(monkeypatch):
+    """The default run should NOT print span JSON to stdout.
+
+    A user running `gds-api-schema-uplift examples/broken.yaml` with no
+    telemetry env vars set was getting OTel console exporter output
+    interleaved with the report and the approval prompt. This test pins
+    the fix: no endpoint, no console flag → no OTel initialisation.
+    """
+    for var in (DISABLED_ENV, ENDPOINT_ENV, EVENTS_PATH_ENV):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.delenv("GDS_UPLIFT_OTEL_CONSOLE", raising=False)
+    config = TelemetryConfig.from_env()
+    assert config.otel_active is False
+
+
+def test_console_export_env_activates_otel(monkeypatch):
+    """Debugging telemetry itself — opt in via GDS_UPLIFT_OTEL_CONSOLE=1."""
+    monkeypatch.setenv("GDS_UPLIFT_OTEL_CONSOLE", "1")
+    monkeypatch.delenv(DISABLED_ENV, raising=False)
+    monkeypatch.delenv(ENDPOINT_ENV, raising=False)
+    config = TelemetryConfig.from_env()
+    assert config.otel_active is True
+    assert config.console_export is True
 
 
 # --- factory / env integration ---------------------------------------------

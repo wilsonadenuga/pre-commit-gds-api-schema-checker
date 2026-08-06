@@ -9,7 +9,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 SPEC ?= examples/broken.yaml
 
-.PHONY: help setup test demo demo-good clean
+.PHONY: help setup test demo demo-good demo-otel clean
 
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -37,6 +37,10 @@ demo: ## Run the checker against the deliberately broken fixture
 
 demo-good: ## Run the checker against the compliant fixture (expect zero findings)
 	$(VENV)/bin/gds-api-schema-uplift examples/good.yaml
+
+demo-otel: ## Run against broken.yaml with telemetry pointed at SigNoz (see signoz/README.md)
+	GDS_UPLIFT_OTEL_ENDPOINT=$${GDS_UPLIFT_OTEL_ENDPOINT:-http://localhost:4318} \
+		$(VENV)/bin/gds-api-schema-uplift $(SPEC)
 
 clean: ## Remove the environment and caches
 	rm -rf $(VENV) .pytest_cache

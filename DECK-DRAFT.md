@@ -92,6 +92,7 @@ $ gds-api-schema-uplift openapi.yaml
 ## Slide 7 — What's next
 
 - A GitHub Action, so the same checks run on every pull request as annotations
+- A VS Code extension, so findings surface as squigglies in the editor before the commit hook ever fires
 - More rules — the v1 ceiling is the whole GDS standard, not the subset we shipped this week
 - A shared clause map that gov teams contribute back to
 

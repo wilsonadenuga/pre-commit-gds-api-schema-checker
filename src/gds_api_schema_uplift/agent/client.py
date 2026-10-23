@@ -33,8 +33,8 @@ from .tools import (
 #: PRD s9.4 names Sonnet as the primary agent model: fast enough for a live demo and
 #: more than capable of a JSON Patch plus a rationale. Opus is capability we do not
 #: need at latency a 3-minute demo cannot afford.
-#: Bedrock model ids carry an `anthropic.` prefix. Sonnet 5 is the Sonnet that
-#: Bedrock's Messages API endpoint serves.
+#: Bedrock model ids carry an `anthropic.` prefix. Sonnet 5 is served in-region in
+#: eu-west-2 (London) on the bedrock-runtime endpoint.
 DEFAULT_MODEL = "anthropic.claude-sonnet-5"
 
 #: A patch proposal is a short, well-scoped task with the clause already supplied, so
@@ -334,12 +334,12 @@ def propose_for_findings(
 
 
 def build_messages_api() -> MessageCreator:
-    """Construct the messages API on Amazon Bedrock.
+    """Construct the messages API on Amazon Bedrock (bedrock-runtime endpoint).
 
     Imported lazily so the package imports (and the deterministic pass runs) without
     the SDK resolving credentials. Region and credentials come from the standard AWS
     chain: `AWS_REGION`, `AWS_PROFILE` / SSO, or access-key environment variables.
     """
-    from anthropic import AnthropicBedrockMantle
+    from anthropic import AnthropicBedrock
 
-    return AnthropicBedrockMantle().messages
+    return AnthropicBedrock().messages

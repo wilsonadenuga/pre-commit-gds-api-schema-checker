@@ -82,8 +82,8 @@ $0.05. Per-run total and cache hit ratio print at the end — a hit ratio of zer
 across a multi-finding run means caching has stopped working and costs ~10× more
 than it should.
 
-The agent calls Claude on Amazon Bedrock through the Anthropic SDK's
-`AnthropicBedrockMantle` client. Region and credentials come from the standard AWS
+The agent calls Claude on Amazon Bedrock (the `bedrock-runtime` endpoint, in-region
+in `eu-west-2`) through the Anthropic SDK's `AnthropicBedrock` client. Region and credentials come from the standard AWS
 chain (`AWS_REGION`, `AWS_PROFILE` / SSO, or access-key variables). Bedrock bills
 separately from Anthropic, so the printed cost is an estimate.
 

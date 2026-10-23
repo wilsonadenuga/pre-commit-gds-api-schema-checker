@@ -18,7 +18,7 @@ dependencies = [
     "openapi-spec-validator>=0.7",
     "jsonpatch>=1.33",
     # s9.4 AI layer
-    # `[bedrock]` pulls in the AWS signing dependencies for AnthropicBedrockMantle.
+    # `[bedrock]` pulls in the AWS signing dependencies for AnthropicBedrock.
     "anthropic[bedrock]>=1.5",
     # `.env` loading — user's ANTHROPIC_API_KEY and GDS_UPLIFT_* env vars come
     # from a local .env by convention (see .env.example); auto-load rather

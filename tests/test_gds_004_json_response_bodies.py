@@ -13,6 +13,8 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+from example_specs import ALL_RULES_SPEC
+
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules.gds_004_json_response_bodies import check
@@ -63,7 +65,7 @@ def _locations(spec) -> list[str]:
 
 
 def test_broken_fixture_yields_exactly_one_finding():
-    findings = check(load_spec(EXAMPLES / "broken.yaml"))
+    findings = check(load_spec(ALL_RULES_SPEC))
 
     assert len(findings) == 1
     finding = findings[0]
@@ -77,7 +79,7 @@ def test_broken_fixture_yields_exactly_one_finding():
 
 def test_broken_fixture_does_not_flag_problem_json_responses():
     """The 429/500 problem+json and POST application/json bodies are compliant."""
-    locations = _locations(load_spec(EXAMPLES / "broken.yaml"))
+    locations = _locations(load_spec(ALL_RULES_SPEC))
 
     assert not [loc for loc in locations if "problem+json" in loc]
     assert not [loc for loc in locations if "application/json" in loc]

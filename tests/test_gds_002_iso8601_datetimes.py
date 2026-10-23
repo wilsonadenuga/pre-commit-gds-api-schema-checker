@@ -11,6 +11,8 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+from example_specs import ALL_RULES_SPEC
+
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules.gds_002_iso8601_datetimes import check, is_temporal_name
@@ -61,7 +63,7 @@ def locations(tmp_path: Path, properties: str) -> list[str]:
 
 
 def test_broken_fixture_yields_exactly_one_finding():
-    findings = check(load_spec(EXAMPLES / "broken.yaml"))
+    findings = check(load_spec(ALL_RULES_SPEC))
     assert len(findings) == 1, [f.location for f in findings]
 
     finding = findings[0]
@@ -75,7 +77,7 @@ def test_broken_fixture_yields_exactly_one_finding():
 
 def test_broken_fixture_does_not_flag_the_compliant_component():
     """`components.schemas.User.properties.createdOn` has `format: date-time`."""
-    flagged = {f.location for f in check(load_spec(EXAMPLES / "broken.yaml"))}
+    flagged = {f.location for f in check(load_spec(ALL_RULES_SPEC))}
     assert "$.components.schemas.User.properties.createdOn" not in flagged
 
 

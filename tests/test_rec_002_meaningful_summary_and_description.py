@@ -1,12 +1,7 @@
-"""REC-002 — operations declare a meaningful `summary` and `description`.
+"""REC-002 — every operation has a meaningful description; the summary is optional.
 
-The two fixture assertions are the acceptance criteria: exactly one finding on
-`examples/broken.yaml` at the GET operation with no summary/description, and
-zero findings on `examples/good.yaml`. Everything else pins a scope decision
-documented in the rule module — per-operation (not inherited), the short-cutoff
-numbers, the redundancy checks, and the non-string / edge-case behaviour — so a
-later change that widens the rule fails a test rather than quietly moving the
-fixture counts.
+The fixture tests check one finding on the all-rules fixture and none on good.yaml.
+The rest pin the edge cases: missing, empty, too short, or copied descriptions.
 """
 
 from __future__ import annotations
@@ -15,13 +10,14 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from example_specs import ALL_RULES_SPEC
 
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules.rec_002_meaningful_summary_and_description import check
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
-BROKEN = EXAMPLES / "broken.yaml"
+BROKEN = ALL_RULES_SPEC
 GOOD = EXAMPLES / "good.yaml"
 
 #: The one violation in broken.yaml: GET /getUserList has no summary/description.
@@ -96,7 +92,7 @@ def test_operation_with_clear_summary_and_longer_description(tmp_path):
 
 
 def test_boundary_lengths_pass(tmp_path):
-    """A 10-char summary and a 15-char description sit exactly on the cutoff."""
+    """A 15-char description sits exactly on the cutoff."""
     body = """\
     /things:
       get:
@@ -171,8 +167,8 @@ def test_operation_with_own_fields_ignores_path_item_level(tmp_path):
 # --- non-compliant cases --------------------------------------------------------------
 
 
-def test_missing_summary_only_yields_one_finding(tmp_path):
-    """Description alone does not satisfy REC-002."""
+def test_missing_summary_is_fine(tmp_path):
+    """The summary is optional: a good description alone passes."""
     body = """\
     /things:
       get:
@@ -182,10 +178,7 @@ def test_missing_summary_only_yields_one_finding(tmp_path):
           '200':
             description: ok
     """
-    findings = check(_spec(tmp_path, body))
-    assert len(findings) == 1
-    assert findings[0].location == "$.paths['/things'].get"
-    assert "summary" in findings[0].snippet
+    assert check(_spec(tmp_path, body)) == []
 
 
 def test_missing_description_only_yields_one_finding(tmp_path):
@@ -205,8 +198,8 @@ def test_missing_description_only_yields_one_finding(tmp_path):
     assert "description" in findings[0].snippet
 
 
-def test_missing_both_yields_one_finding_not_two(tmp_path):
-    """One violation per operation, however many fields are absent."""
+def test_missing_both_yields_one_description_finding(tmp_path):
+    """With neither field, the one finding is about the description."""
     body = """\
     /things:
       get:
@@ -218,13 +211,11 @@ def test_missing_both_yields_one_finding_not_two(tmp_path):
     findings = check(_spec(tmp_path, body))
     assert len(findings) == 1
     assert findings[0].location == "$.paths['/things'].get"
-    # Snippet mentions both triggers so a reader can see what is missing.
-    assert "summary" in findings[0].snippet
-    assert "description" in findings[0].snippet
+    assert findings[0].snippet == "description missing"
 
 
-def test_empty_summary_string_is_flagged(tmp_path):
-    """`summary: ""` is present but placeholder; treated as missing content."""
+def test_empty_summary_string_is_fine(tmp_path):
+    """The summary is optional, so an empty one is not flagged."""
     body = """\
     /things:
       get:
@@ -235,13 +226,11 @@ def test_empty_summary_string_is_flagged(tmp_path):
           '200':
             description: ok
     """
-    findings = check(_spec(tmp_path, body))
-    assert len(findings) == 1
-    assert "summary" in findings[0].snippet
+    assert check(_spec(tmp_path, body)) == []
 
 
-def test_whitespace_only_summary_is_flagged(tmp_path):
-    """A whitespace-only string is empty for our purposes."""
+def test_whitespace_only_summary_is_fine(tmp_path):
+    """The summary is optional, so an empty one is not flagged."""
     body = """\
     /things:
       get:
@@ -252,9 +241,7 @@ def test_whitespace_only_summary_is_flagged(tmp_path):
           '200':
             description: ok
     """
-    findings = check(_spec(tmp_path, body))
-    assert len(findings) == 1
-    assert "summary" in findings[0].snippet
+    assert check(_spec(tmp_path, body)) == []
 
 
 def test_description_equals_summary_is_flagged(tmp_path):
@@ -291,8 +278,8 @@ def test_description_equals_operation_id_is_flagged(tmp_path):
     assert "operationId" in findings[0].snippet
 
 
-def test_very_short_summary_is_flagged(tmp_path):
-    """A 9-char summary is under the 10-char cutoff and looks like a stub."""
+def test_short_summary_is_fine(tmp_path):
+    """Summary length is not checked; only the description has a minimum."""
     body = """\
     /things:
       get:
@@ -303,12 +290,7 @@ def test_very_short_summary_is_flagged(tmp_path):
           '200':
             description: ok
     """
-    # "List one" is 8 chars; use a 9-char stub to sit right under the cutoff.
-    body = body.replace("List one", "List nine")
-    assert len("List nine") == 9
-    findings = check(_spec(tmp_path, body))
-    assert len(findings) == 1
-    assert "summary" in findings[0].snippet
+    assert check(_spec(tmp_path, body)) == []
 
 
 def test_two_offending_operations_yield_two_findings(tmp_path):

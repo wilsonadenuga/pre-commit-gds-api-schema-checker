@@ -19,6 +19,7 @@ from .client import (
     build_messages_api,
     propose_for_finding,
     propose_for_findings,
+    review_descriptions,
 )
 from .tools import ToolInputError, parse_propose_patch, tool_definitions
 
@@ -34,5 +35,6 @@ __all__ = [
     "parse_propose_patch",
     "propose_for_finding",
     "propose_for_findings",
+    "review_descriptions",
     "tool_definitions",
 ]

@@ -106,9 +106,9 @@ def check(
         typer.Option(
             "--max-llm-calls",
             min=0,
-            help="Cap agent calls per run (PRD s11 cost mitigation).",
+            help="Cap AI calls per run, to control cost.",
         ),
-    ] = 5,
+    ] = 7,
     no_apply: Annotated[
         bool,
         typer.Option(
@@ -310,7 +310,13 @@ def _run_agent(
     run to deterministic-only with a clear note — never turn a working check into a
     non-zero exit.
     """
-    from .agent import AgentConfig, AgentRun, build_messages_api, propose_for_findings
+    from .agent import (
+        AgentConfig,
+        AgentRun,
+        build_messages_api,
+        propose_for_findings,
+        review_descriptions,
+    )
 
     config = AgentConfig(model=model, effort=effort, max_llm_calls=max_llm_calls)
     run = AgentRun(config=config)
@@ -336,6 +342,12 @@ def _run_agent(
             standards=standards,
             run=run,
         )
+        # Then one call to check the summaries and descriptions read clearly.
+        review = review_descriptions(messages_api, spec=spec, standards=standards, run=run)
+        if review is not None:
+            suggestions.append(review)
+            if not review.offered:
+                run.patches_dropped += 1
     except Exception as exc:  # noqa: BLE001 - network/API errors must not fail the run
         err.print(
             f"[yellow]AI fixes failed:[/yellow] {exc}. The rule findings below "

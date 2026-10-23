@@ -41,7 +41,7 @@ gds-api-schema-uplift SPEC_PATH [OPTIONS]
   --no-llm                      Deterministic pass only; never call the agent.
   --no-apply                    Report-only mode: never prompt or write to
                                 disk. Implied by --format=json.
-  --max-llm-calls INTEGER       Cap agent calls per run. [default: 5]
+  --max-llm-calls INTEGER       Cap AI calls per run, to control cost. [default: 7]
   --model TEXT                  Bedrock model id. [default: anthropic.claude-sonnet-5]
   --effort [low|medium|high|max]  Agent reasoning effort. [default: low]
   --standards PATH              Override the standards.yaml path.
@@ -77,8 +77,8 @@ real client fail loudly inside tests.
 
 Measured on `examples/broken.yaml` with `claude-sonnet-4-6` at `--effort low`:
 the first suggestion costs about **$0.015** (it writes the prompt cache), each
-subsequent one about **$0.009** (it reads it). A default 5-call run is roughly
-$0.05. Per-run total and cache hit ratio print at the end — a hit ratio of zero
+subsequent one about **$0.009** (it reads it). A default 7-call run is roughly
+$0.07. Per-run total and cache hit ratio print at the end — a hit ratio of zero
 across a multi-finding run means caching has stopped working and costs ~10× more
 than it should.
 
@@ -104,7 +104,7 @@ recommendations cited to external conventions.
 | `NCSC-003` | Request bodies set `additionalProperties: false` | warning | NCSC §4 |
 | `NCSC-004` | Rate limiting acknowledged — `429` response defined on every operation | suggestion | NCSC §5 |
 | `REC-001` | Paths use kebab-case, plural nouns *(recommendation)* | suggestion | REST convention + MS API Guidelines |
-| `REC-002` | Operations declare a meaningful summary and description *(recommendation)* | suggestion | OpenAPI conventions |
+| `REC-002` | Every operation has a meaningful description; summary optional *(our standard)* | suggestion | OpenAPI conventions, plus an AI review of the wording |
 
 **`REC-*` rules are conventions with no GDS or NCSC anchor.** They are cited to
 external references and are rendered as explicitly not GDS-mandated. This

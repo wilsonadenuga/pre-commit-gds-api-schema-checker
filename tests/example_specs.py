@@ -11,8 +11,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = REPO_ROOT / "examples"
 
-#: The deliberately non-compliant fixture: one unambiguous violation per v0.2 rule.
+#: The demo fixture: six violations, so one run with the default AI cap covers them all.
 BROKEN_SPEC = EXAMPLES / "broken.yaml"
+
+#: Test-only fixture: one unambiguous violation per v0.2 rule (all 11).
+ALL_RULES_SPEC = REPO_ROOT / "tests" / "fixtures" / "all-rules-broken.yaml"
 
 #: The compliant fixture: must produce zero findings, and is the round-trip fixture.
 GOOD_SPEC = EXAMPLES / "good.yaml"

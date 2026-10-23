@@ -30,7 +30,9 @@ from gds_api_schema_uplift.agent.client import (
     BudgetExhausted,
     propose_for_finding,
     propose_for_findings,
+    review_descriptions,
 )
+from gds_api_schema_uplift.contracts import RuleType
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules import run_deterministic_pass
 from gds_api_schema_uplift.standards import parse_standards
@@ -367,3 +369,52 @@ def test_run_works_with_an_empty_corpus_but_cannot_cite(spec, gds_001):
 
     assert suggestion.offered is True
     assert suggestion.has_citation is False
+
+
+# --- AI review of summaries and descriptions ------------------------------------------
+
+POST_DESCRIPTION = "/paths/~1users/post/description"
+
+
+def test_review_sends_every_summary_and_description_in_one_call(spec, standards):
+    stub = StubMessages([propose_patch_response([], rationale="All clear.")])
+    run = AgentRun(config=AgentConfig())
+
+    review_descriptions(stub, spec=spec, standards=standards, run=run)
+
+    assert stub.call_count == 1
+    content = stub.requests[0]["messages"][0]["content"]
+    assert POST_DESCRIPTION in content
+    assert "/paths/~1users/post/summary" in content
+
+
+def test_review_returns_nothing_when_all_text_is_clear(spec, standards):
+    stub = StubMessages([propose_patch_response([], rationale="All clear.")])
+    run = AgentRun(config=AgentConfig())
+
+    assert review_descriptions(stub, spec=spec, standards=standards, run=run) is None
+
+
+def test_review_offers_a_rewrite_through_the_normal_gate(spec, standards):
+    rewrite = [{"op": "replace", "path": POST_DESCRIPTION, "value": "Creates a user."}]
+    stub = StubMessages([propose_patch_response(rewrite, clause_quote="must have")])
+    run = AgentRun(config=AgentConfig())
+
+    review = review_descriptions(stub, spec=spec, standards=standards, run=run)
+
+    assert review is not None and review.offered
+    assert review.finding.rule_id == "REC-002"
+    assert review.finding.rule_type is RuleType.LLM
+    assert "Creates a user." in review.diff
+
+
+def test_review_makes_no_call_when_the_budget_is_spent(spec, standards):
+    stub = StubMessages([])
+    run = AgentRun(config=AgentConfig(max_llm_calls=0))
+
+    assert review_descriptions(stub, spec=spec, standards=standards, run=run) is None
+    assert stub.call_count == 0
+
+
+def test_default_cap_is_seven():
+    assert AgentConfig().max_llm_calls == 7

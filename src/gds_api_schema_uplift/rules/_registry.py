@@ -1,9 +1,6 @@
-"""The rule registry.
+"""The list of registered rules.
 
-Lives in its own module so rule modules can `from ._registry import register` and
-self-register at import time without importing a half-initialised `rules/__init__`.
-`rules/__init__` re-exports everything here, so callers still use
-`from gds_api_schema_uplift.rules import REGISTRY`.
+Each rule file calls `register(...)` to add itself here.
 """
 
 from __future__ import annotations
@@ -66,19 +63,10 @@ def register(
     good_example: str,
     rule_type: RuleType = RuleType.DETERMINISTIC,
 ) -> Callable[[Checker], Checker]:
-    """Register a checker under `rule_id`.
+    """Add a rule to the registry.
 
-    The `clause_id` is declared here, at registration, rather than being chosen at
-    finding time. That is what makes citation static and lets Phase 2's integrity
-    test walk the registry without running any rules.
-
-    `good_example` — a short YAML fragment showing the compliant pattern —
-    is required. It's what the deterministic report renders in the "How to
-    fix" section, so a `--no-llm` run tells the developer both what's wrong
-    and what shape a fix takes. Making it required at register time is
-    deliberate: a rule that ships without an example would silently produce
-    an empty panel, and the ruleset is closed enough (v0.2) that loud
-    failure beats a default.
+    Each rule must name the standards clause it comes from and give a fix example,
+    which the report shows under "Fix:".
     """
 
     def decorator(checker: Checker) -> Checker:
@@ -115,16 +103,9 @@ def llm_rules() -> tuple[RuleSpec, ...]:
 
 
 def run_deterministic_pass(spec: LoadedSpec) -> list[Finding]:
-    """Run every deterministic rule and collect findings.
+    """Run every rule and return all findings, in rule-id order.
 
-    Rules run in sorted rule-id order and each rule's own findings keep their
-    emission order, so report output and goldens are stable regardless of the order
-    rule modules happen to be imported in.
-
-    Findings are enriched with `(line, column)` from the ruamel line-column
-    data attached to the parsed spec. Rules stay location-only — one place
-    (the resolver) owns the JSONPath-to-source-coordinates walk, so a rule
-    author does not have to know anything about ruamel `.lc` internals.
+    Each finding also gets the line and column it came from in the spec file.
     """
     findings: list[Finding] = []
     for rule in deterministic_rules():
@@ -134,13 +115,7 @@ def run_deterministic_pass(spec: LoadedSpec) -> list[Finding]:
 
 
 def _with_source_position(finding: Finding, spec: LoadedSpec) -> Finding:
-    """Attach (line, column) if the resolver can find them, else pass through.
-
-    A finding already carrying line info is left alone — a rule that computed
-    a more specific position than the JSONPath resolver could is worth
-    preserving. In practice no rule does this yet, but the guard keeps the
-    door open without a contract change.
-    """
+    """Add the line and column to a finding, if they can be found."""
     if finding.line is not None:
         return finding
     line, column = resolve_line(spec.data, finding.location)

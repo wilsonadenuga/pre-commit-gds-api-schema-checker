@@ -13,6 +13,8 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+from example_specs import ALL_RULES_SPEC
+
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules.ncsc_003_additional_properties_false import check
@@ -75,7 +77,7 @@ def _locations(spec) -> list[str]:
 
 def test_broken_fixture_yields_exactly_one_finding():
     """The broken fixture must produce one NCSC-003 finding on the POST body."""
-    findings = check(load_spec(EXAMPLES / "broken.yaml"))
+    findings = check(load_spec(ALL_RULES_SPEC))
 
     assert len(findings) == 1
     finding = findings[0]

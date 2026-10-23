@@ -142,7 +142,9 @@ clauses:
     authority: recommendation
     url: https://spec.openapis.org/oas/v3.1.0.html#operation-object
     text: >-
-      This is a convention, not a GDS or NCSC requirement. The OpenAPI Operation Object
-      defines an optional `summary` ("A short summary of what the operation does") and
-      `description` ("A verbose explanation of the operation behavior"). Populating them
-      is what makes generated documentation and generated agent tool definitions usable.
+      This is our own standard, not a GDS or NCSC requirement. Every operation must have
+      a description that clearly explains, in plain English, what the operation does and
+      when to use it. AI agents read the description to decide which operation to call.
+      The OpenAPI Operation Object defines `description` as "A verbose explanation of the
+      operation behavior" and `summary` as "A short summary of what the operation does";
+      the summary is optional.

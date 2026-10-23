@@ -8,7 +8,7 @@ are the assertions here.
 
 from __future__ import annotations
 
-from example_specs import BROKEN_SPEC, GOOD_SPEC
+from example_specs import ALL_RULES_SPEC, GOOD_SPEC
 
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules import REGISTRY, run_deterministic_pass
@@ -30,7 +30,7 @@ RULES_WITH_A_FIXTURE_VIOLATION = (
 
 
 def broken_findings():
-    return run_deterministic_pass(load_spec(BROKEN_SPEC))
+    return run_deterministic_pass(load_spec(ALL_RULES_SPEC))
 
 
 # --- M1: detection and zero false positives -------------------------------------------
@@ -139,7 +139,7 @@ def test_the_pass_does_not_perturb_the_document():
     An accidental mutation there would silently corrupt a developer's file when
     Phase 4 writes it back, and would not show up as a failing rule test.
     """
-    for path in (BROKEN_SPEC, GOOD_SPEC):
+    for path in (ALL_RULES_SPEC, GOOD_SPEC):
         spec = load_spec(path)
         run_deterministic_pass(spec)
         assert spec.dumps() == path.read_text(), path.name

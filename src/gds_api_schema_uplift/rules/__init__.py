@@ -1,15 +1,7 @@
-"""The rule package.
+"""The rules: 5 GDS, 4 NCSC and 2 recommendations.
 
-Registry machinery lives in `_registry`; spec traversal helpers live in `_traversal`.
-Rule modules are imported at the bottom of this file purely for their registration
-side effect — importing `gds_api_schema_uplift.rules` must be enough to populate
-`REGISTRY`, because that is what the CLI relies on.
-
-Rule modules are named `<rule_id>_<what_it_checks>` so the filename says what the
-rule does and the directory still sorts by rule id.
-
-Phase 1 lands `GDS-001`–`GDS-005`; Phase 5a adds `NCSC-001`–`NCSC-004`; Phase 5b adds
-`REC-001`/`REC-002` (v0.2 ruleset complete).
+Each rule lives in its own file, named `<rule_id>_<what_it_checks>`. Importing this
+package imports every rule file, which registers the rule so the CLI can run it.
 """
 
 from __future__ import annotations
@@ -36,8 +28,7 @@ __all__ = [
     "run_deterministic_pass",
 ]
 
-# Registration side effects, sorted by rule id. `noqa: E402,F401` — these are
-# imported for their decorator side effect, not for their names.
+# Imported only so each rule registers itself (hence the `noqa`).
 from . import gds_001_https_only  # noqa: E402,F401
 from . import gds_002_iso8601_datetimes  # noqa: E402,F401
 from . import gds_003_uri_path_versioning  # noqa: E402,F401

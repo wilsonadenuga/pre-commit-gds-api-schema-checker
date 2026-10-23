@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from example_specs import BROKEN_SPEC, GOOD_SPEC, minimal_spec_body, write_spec
+from example_specs import ALL_RULES_SPEC, BROKEN_SPEC, GOOD_SPEC, minimal_spec_body, write_spec
 from gds_api_schema_uplift.contracts import Patch, PatchOp
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.patching import (
@@ -40,7 +40,7 @@ def _gds_001_fix() -> Patch:
 
 @pytest.fixture
 def broken():
-    return load_spec(BROKEN_SPEC)
+    return load_spec(ALL_RULES_SPEC)
 
 
 # --- the happy path ---------------------------------------------------------------------
@@ -299,7 +299,7 @@ def test_patched_text_preserves_comments(broken):
     text = patched_text(broken, validate_patch(broken, _gds_001_fix()))
 
     for comment in (
-        "# DELIBERATELY NON-COMPLIANT fixture.",  # document head
+        "# DELIBERATELY NON-COMPLIANT test fixture",  # document head
         "# GDS-001: plaintext transport.",  # before a root key
         "# REC-002: no summary, no description.",  # first key of a nested map
         "# GDS-004: XML rather than JSON.",

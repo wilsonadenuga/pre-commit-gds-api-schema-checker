@@ -108,13 +108,13 @@ def test_text_report_shows_rule_severity_and_location():
 
 
 def test_text_report_summarises_counts_by_severity():
-    """v0.2 ruleset complete on broken.yaml: 3 errors (GDS-001, NCSC-001, NCSC-002),
-    5 warnings (GDS-002..005 + NCSC-003), 3 suggestions (NCSC-004, REC-001, REC-002)."""
+    """The demo broken.yaml: 3 errors (GDS-001, NCSC-001, NCSC-002),
+    2 warnings (GDS-003, GDS-004) and 1 suggestion (REC-002)."""
     result = runner.invoke(app, [str(BROKEN_SPEC)])
-    assert "11 findings" in result.output
+    assert "6 findings" in result.output
     assert "3 errors" in result.output
-    assert "5 warnings" in result.output
-    assert "3 suggestions" in result.output
+    assert "2 warnings" in result.output
+    assert "1 suggestion" in result.output
 
 
 def test_report_resolves_citations_now_the_corpus_is_authored():
@@ -159,7 +159,7 @@ def test_findings_render_the_clause_section_not_just_the_id():
     output = buffer.getvalue()
 
     assert "Secure your API" in output
-    assert "Use standard HTTP responses" in output
+    assert "Use JSON for response formats" in output
     assert "unresolved" not in output
 
 
@@ -178,7 +178,7 @@ def test_json_report_carries_every_finding_contract_field():
     result = runner.invoke(app, [str(BROKEN_SPEC), "--format", "json"])
     assert result.exit_code == EXIT_FINDINGS
     payload = json.loads(result.output)
-    assert len(payload["findings"]) == 11
+    assert len(payload["findings"]) == 6
     for finding in payload["findings"]:
         assert set(finding) == {
             "rule_id",

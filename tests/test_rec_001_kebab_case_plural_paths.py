@@ -19,12 +19,14 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+from example_specs import ALL_RULES_SPEC
+
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules.rec_001_kebab_case_plural_paths import check
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-BROKEN = REPO_ROOT / "examples" / "broken.yaml"
+BROKEN = ALL_RULES_SPEC
 GOOD = REPO_ROOT / "examples" / "good.yaml"
 
 _HEADER_31 = """openapi: 3.1.0

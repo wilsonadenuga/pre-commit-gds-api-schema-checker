@@ -1,19 +1,11 @@
-"""GDS-002 — dates and times are ISO 8601 strings.
+"""GDS-002 — date and time fields must use ISO 8601.
 
-A string property whose *name* says it carries a date or a time has to say so in the
-schema too, with `format: date`, `format: date-time` or `format: time`. Without a
-format, `type: string` permits `31/12/2025`, and the consumer has no way to know
-which of dd/mm/yyyy or mm/dd/yyyy it is looking at.
+If a string field's name says it holds a date or time (like `createdAt`), its
+schema must say `format: date`, `date-time` or `time`. Otherwise `31/12/2025` is
+allowed, and nobody can tell if it's day/month or month/day.
 
-The rule is name-driven, so the heuristic is deliberately narrow. M1 requires zero
-false positives on the compliant fixture, and a wrong finding here is worse than a
-miss: it teaches a developer to stop reading the output. Two consequences:
-
-* names are matched on whole *tokens* after splitting camelCase/snake_case, never on
-  substrings — `updatedBy` contains "date" and `validate` contains "date", and
-  neither is temporal;
-* only `type: string` is in scope. An integer epoch is a different (and arguably
-  worse) problem, but it is not this rule's problem.
+The name check splits names into whole words, so `updatedBy` and `validate` don't
+count as dates. Only string fields are checked.
 """
 
 from __future__ import annotations
@@ -36,24 +28,20 @@ from ._traversal import (
     walk_schema,
 )
 
-#: The ISO 8601 formats JSON Schema defines for temporal values. One of these must be
-#: present on a date/time-named string.
+#: The allowed ISO 8601 formats.
 ISO_8601_FORMATS = frozenset({"date", "date-time", "time"})
 
-#: Whole-token names that mark a property as carrying a date or a time.
+#: Words that mean a field holds a date or time.
 TEMPORAL_TOKENS = frozenset(
     {"date", "dates", "datetime", "time", "times", "timestamp", "timestamps"}
 )
 
-#: Trailing tokens that mark a participle-style temporal name (`createdAt`,
-#: `updated_on`). Only meaningful as the *last* token of a multi-token name, so a
-#: property called plain `on` or `at` is left alone.
+#: Last words like in `createdAt` or `updated_on`. They only count at the end of a
+#: longer name, so a field called just `on` or `at` is ignored.
 TEMPORAL_SUFFIX_TOKENS = frozenset({"at", "on"})
 
-#: Tokens that veto a temporal match. These co-occur with `time`/`date` on values
-#: that are not themselves an instant — a timezone identifier, a display format
-#: string, an ISO 8601 duration — and demanding `format: date-time` of them would be
-#: wrong.
+#: Words that mean the field is *not* a date, even if it contains "time" or "date",
+#: like `timeZone` or `dateFormat`.
 NON_TEMPORAL_TOKENS = frozenset(
     {"zone", "zones", "offset", "format", "formats", "duration", "durations", "pattern"}
 )
@@ -66,9 +54,7 @@ _TOKEN_SPLIT = re.compile(
 
 
 def tokenise(name: str) -> list[str]:
-    """Split a property name into lower-cased words.
-
-    Handles snake_case, kebab-case and camelCase/PascalCase, including acronym runs::
+    """Split a field name into lower-case words::
 
         tokenise("createdAt")    -> ["created", "at"]
         tokenise("birth_date")   -> ["birth", "date"]
@@ -78,7 +64,7 @@ def tokenise(name: str) -> list[str]:
 
 
 def is_temporal_name(name: str | None) -> bool:
-    """True when a property name indicates it carries a date or a time."""
+    """True if the field name says it holds a date or time."""
     if not name:
         return False
     tokens = tokenise(name)
@@ -92,11 +78,7 @@ def is_temporal_name(name: str | None) -> bool:
 
 
 def _is_string_typed(schema: dict[str, Any]) -> bool:
-    """True when the node declares `type: string`.
-
-    OpenAPI 3.1 allows a type *array* (`type: [string, 'null']` for a nullable
-    field), so a list containing "string" counts.
-    """
+    """True if the field is a string, including `type: [string, 'null']`."""
     declared = schema.get("type")
     if isinstance(declared, str):
         return declared == "string"
@@ -111,8 +93,8 @@ def _has_iso_8601_format(schema: dict[str, Any]) -> bool:
 
 
 def _violates(ref: SchemaRef) -> bool:
-    """True when this node is a date/time-named string with no ISO 8601 format."""
-    if is_ref(ref.schema):  # a pointer carries no type of its own
+    """True if this is a date/time-named string with no ISO 8601 format."""
+    if is_ref(ref.schema):  # a `$ref` is checked where it points
         return False
     if not is_temporal_name(ref.name):
         return False
@@ -122,17 +104,12 @@ def _violates(ref: SchemaRef) -> bool:
 
 
 def _content_root(content: ContentRef) -> SchemaRef:
-    """The schema of a media-type entry, as an unnamed walk root."""
+    """The schema inside a request or response body."""
     return SchemaRef(name=None, schema=content.schema, location=content.schema_location)
 
 
 def _entry_points(data: Any) -> list[SchemaRef]:
-    """Every schema root the rule walks, in report order.
-
-    Request bodies first, then response bodies, then named components: a finding on
-    the operation a developer just edited should come before one in the shared
-    component library.
-    """
+    """Where to start looking: request bodies, then responses, then components."""
     roots: list[SchemaRef] = []
     for _op, content in iter_request_body_content(data):
         roots.append(_content_root(content))
@@ -142,7 +119,6 @@ def _entry_points(data: Any) -> list[SchemaRef]:
     return roots
 
 
-#: The compliant shape, rendered by the report's "How to fix" section.
 GOOD_EXAMPLE = """\
 properties:
   createdAt:
@@ -162,13 +138,10 @@ properties:
     good_example=GOOD_EXAMPLE,
 )
 def check(spec: LoadedSpec) -> list[Finding]:
-    """Find date/time-named string properties that declare no ISO 8601 format."""
+    """Flag date/time-named string fields that have no ISO 8601 format."""
     data = as_mapping(spec.data)
 
-    # Keyed by location: one schema node can be reached from more than one entry
-    # point (a component walked from `components.schemas`, an aliased node walked
-    # from two operations), and the developer has one thing to fix either way. dict
-    # preserves insertion order, so first-seen order is the report order.
+    # Keyed by location, so a field reached two ways is only reported once.
     found: dict[str, Finding] = {}
 
     for root in _entry_points(data):
@@ -177,9 +150,6 @@ def check(spec: LoadedSpec) -> list[Finding]:
                 continue
             if ref.location in found:
                 continue
-            # Actionable snippet: name the property and say what's missing.
-            # Fixes an on-screen "{type, pattern, examples}" that looked like
-            # a shape hint but told the developer nothing about the violation.
             field_name = ref.name or "(anonymous)"
             found[ref.location] = Finding(
                 rule_id="GDS-002",

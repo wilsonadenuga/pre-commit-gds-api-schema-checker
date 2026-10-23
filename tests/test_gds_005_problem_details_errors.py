@@ -16,13 +16,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from example_specs import ALL_RULES_SPEC
 
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules.gds_005_problem_details_errors import check
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-BROKEN = REPO_ROOT / "examples" / "broken.yaml"
+BROKEN = ALL_RULES_SPEC
 GOOD = REPO_ROOT / "examples" / "good.yaml"
 
 #: The minimum an OpenAPI 3.1 document needs to survive `load_spec`.

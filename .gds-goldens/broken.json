@@ -3,7 +3,7 @@
     {
       "clause_id": "GDS-001",
       "column": 5,
-      "line": 32,
+      "line": 25,
       "location": "$.servers[0].url",
       "rule_id": "GDS-001",
       "rule_type": "deterministic",
@@ -11,49 +11,29 @@
       "snippet": "http://api.example.gov.uk"
     },
     {
-      "clause_id": "GDS-002",
-      "column": 17,
-      "line": 85,
-      "location": "$.paths['/getUserList'].post.requestBody.content['application/json'].schema.properties.createdOn",
-      "rule_id": "GDS-002",
-      "rule_type": "deterministic",
-      "severity": "warning",
-      "snippet": "date-named field 'createdOn' has no 'format: date-time' \u2014 add it to declare ISO 8601"
-    },
-    {
       "clause_id": "GDS-003",
       "column": 3,
-      "line": 40,
-      "location": "$.paths['/getUserList']",
+      "line": 33,
+      "location": "$.paths['/users']",
       "rule_id": "GDS-003",
       "rule_type": "deterministic",
       "severity": "warning",
-      "snippet": "/getUserList"
+      "snippet": "/users"
     },
     {
       "clause_id": "GDS-004",
       "column": 13,
-      "line": 51,
-      "location": "$.paths['/getUserList'].get.responses['200'].content['application/xml']",
+      "line": 45,
+      "location": "$.paths['/users'].get.responses['200'].content['application/xml']",
       "rule_id": "GDS-004",
       "rule_type": "deterministic",
       "severity": "warning",
       "snippet": "response media type is application/xml \u2014 GDS mandates JSON (application/json or a +json subtype)"
     },
     {
-      "clause_id": "GDS-005",
-      "column": 13,
-      "line": 101,
-      "location": "$.paths['/getUserList'].post.responses['500'].content['application/json']",
-      "rule_id": "GDS-005",
-      "rule_type": "deterministic",
-      "severity": "warning",
-      "snippet": "error uses application/json with a custom schema \u2014 use application/problem+json (RFC 9457) instead"
-    },
-    {
       "clause_id": "NCSC-001",
       "column": 5,
-      "line": 115,
+      "line": 105,
       "location": "$.components.securitySchemes.basicAuth",
       "rule_id": "NCSC-001",
       "rule_type": "deterministic",
@@ -63,65 +43,30 @@
     {
       "clause_id": "NCSC-002",
       "column": 7,
-      "line": 45,
-      "location": "$.paths['/getUserList'].get.security",
+      "line": 39,
+      "location": "$.paths['/users'].get.security",
       "rule_id": "NCSC-002",
       "rule_type": "deterministic",
       "severity": "error",
-      "snippet": "GET /getUserList switches authentication off with security: []"
-    },
-    {
-      "clause_id": "NCSC-003",
-      "column": 13,
-      "line": 77,
-      "location": "$.paths['/getUserList'].post.requestBody.content['application/json'].schema",
-      "rule_id": "NCSC-003",
-      "rule_type": "deterministic",
-      "severity": "warning",
-      "snippet": "missing additionalProperties: false at request-body root"
-    },
-    {
-      "clause_id": "NCSC-004",
-      "column": 7,
-      "line": 91,
-      "location": "$.paths['/getUserList'].post.responses",
-      "rule_id": "NCSC-004",
-      "rule_type": "deterministic",
-      "severity": "suggestion",
-      "snippet": "no 429 response defined; declared: 201, 500"
-    },
-    {
-      "clause_id": "REC-001",
-      "column": 3,
-      "line": 40,
-      "location": "$.paths['/getUserList']",
-      "rule_id": "REC-001",
-      "rule_type": "deterministic",
-      "severity": "suggestion",
-      "snippet": "path is not kebab-case (contains uppercase or underscore); verb in path \u2014 put verbs in the HTTP method, not the URI: /getUserList"
+      "snippet": "GET /users switches authentication off with security: []"
     },
     {
       "clause_id": "REC-002",
       "column": 5,
-      "line": 41,
-      "location": "$.paths['/getUserList'].get",
+      "line": 34,
+      "location": "$.paths['/users'].get",
       "rule_id": "REC-002",
       "rule_type": "deterministic",
       "severity": "suggestion",
-      "snippet": "summary missing; description missing"
+      "snippet": "description missing"
     }
   ],
   "good_examples": {
     "GDS-001": "servers:\n  - url: https://api.example.gov.uk/v1\n    description: Production\n",
-    "GDS-002": "properties:\n  createdAt:\n    type: string\n    format: date-time\n  dateOfBirth:\n    type: string\n    format: date\n",
     "GDS-003": "paths:\n  /v1/users:\n    get:\n      responses:\n        '200': {...}\n",
     "GDS-004": "responses:\n  '200':\n    description: OK\n    content:\n      application/json:\n        schema:\n          $ref: '#/components/schemas/User'\n",
-    "GDS-005": "responses:\n  '500':\n    description: Server error\n    content:\n      application/problem+json:\n        schema:\n          $ref: '#/components/schemas/Problem'\n",
     "NCSC-001": "components:\n  securitySchemes:\n    departmentOAuth:\n      type: oauth2\n      flows:\n        clientCredentials:\n          tokenUrl: https://auth.example.gov.uk/token\n          scopes: {}\n",
     "NCSC-002": "security:\n  - departmentOAuth: []\npaths:\n  /v1/users:\n    get:\n      # No operation-level `security` \u2014 inherits the root requirement.\n      responses:\n        '200': {...}\n",
-    "NCSC-003": "requestBody:\n  required: true\n  content:\n    application/json:\n      schema:\n        type: object\n        additionalProperties: false\n        properties:\n          name: {type: string}\n",
-    "NCSC-004": "responses:\n  '200': {...}\n  '429':\n    description: Too Many Requests\n    content:\n      application/problem+json:\n        schema:\n          $ref: '#/components/schemas/Problem'\n",
-    "REC-001": "paths:\n  /v1/users:              # kebab-case, plural noun\n    get: {...}\n  /v1/user-preferences:   # multi-word segments join with a hyphen\n    get: {...}\n",
     "REC-002": "paths:\n  /v1/users:\n    get:\n      summary: List users\n      description: |\n        Returns a paginated list of users visible to the caller.\n        Filterable by department and status.\n"
   },
   "openapi_version": "3.1.0",

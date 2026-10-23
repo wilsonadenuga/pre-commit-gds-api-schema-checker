@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from example_specs import ALL_RULES_SPEC
+
 from gds_api_schema_uplift.contracts import RuleType, Severity
 from gds_api_schema_uplift.loader import load_spec
 from gds_api_schema_uplift.rules.gds_003_uri_path_versioning import check
@@ -56,7 +58,7 @@ def _servers_block(*urls: str) -> str:
 
 
 def test_broken_fixture_yields_exactly_one_finding() -> None:
-    findings = check(load_spec(EXAMPLES / "broken.yaml"))
+    findings = check(load_spec(ALL_RULES_SPEC))
 
     assert len(findings) == 1
     finding = findings[0]

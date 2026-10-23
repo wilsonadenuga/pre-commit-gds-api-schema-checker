@@ -14,11 +14,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from ..contracts import Finding, Patch, Suggestion
+from ..contracts import Finding, Patch, RuleType, Severity, Suggestion
 from ..cost import CallUsage, CostTracker
 from ..loader import LoadedSpec
 from ..patching import PatchResult, patched_text, render_diff, validate_patch
 from ..rules import REGISTRY
+from ..rules._traversal import iter_operations
 from ..standards import Standards, StandardsError
 from . import prompts
 from .tools import (
@@ -73,7 +74,7 @@ class AgentConfig:
     model: str = DEFAULT_MODEL
     effort: str = DEFAULT_EFFORT
     max_tokens: int = DEFAULT_MAX_TOKENS
-    max_llm_calls: int = 5
+    max_llm_calls: int = 7
     thinking: bool = True
 
     def request_kwargs(self) -> dict[str, Any]:
@@ -223,25 +224,36 @@ def propose_for_finding(
     """
     rule = REGISTRY.get(finding.rule_id)
     clause_text, clause_url = _clause_for(standards, finding.clause_id)
+    content = prompts.finding_message(
+        rule_id=finding.rule_id,
+        severity=finding.severity.value,
+        location=finding.location,
+        snippet=finding.snippet,
+        rule_summary=rule.summary if rule else "(rule not registered)",
+        clause_id=finding.clause_id,
+        clause_text=clause_text,
+        clause_url=clause_url,
+        spec_excerpt=_spec_excerpt(spec),
+    )
+    return _ask_for_patch(
+        messages_api, spec=spec, finding=finding, standards=standards, run=run,
+        content=content,
+    )
 
+
+def _ask_for_patch(
+    messages_api: MessageCreator,
+    *,
+    spec: LoadedSpec,
+    finding: Finding,
+    standards: Standards,
+    run: AgentRun,
+    content: str,
+) -> Suggestion:
+    """Send one request, handle any clause lookups, and gate the proposed patch."""
     system = prompts.build_system_blocks(standards)
     tools = tool_definitions()
-    messages: list[dict[str, Any]] = [
-        {
-            "role": "user",
-            "content": prompts.finding_message(
-                rule_id=finding.rule_id,
-                severity=finding.severity.value,
-                location=finding.location,
-                snippet=finding.snippet,
-                rule_summary=rule.summary if rule else "(rule not registered)",
-                clause_id=finding.clause_id,
-                clause_text=clause_text,
-                clause_url=clause_url,
-                spec_excerpt=_spec_excerpt(spec),
-            ),
-        }
-    ]
+    messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
 
     for _ in range(MAX_TURNS_PER_FINDING):
         run.note_call()
@@ -331,6 +343,65 @@ def propose_for_findings(
             run.patches_dropped += 1
         suggestions.append(suggestion)
     return suggestions
+
+
+def _texts_to_review(spec: LoadedSpec) -> list[tuple[str, str, str]]:
+    """Every non-empty summary and description, as `(pointer, label, text)`."""
+    texts = []
+    for op in iter_operations(spec.data):
+        escaped = op.path.replace("~", "~0").replace("/", "~1")
+        for field_name in ("summary", "description"):
+            text = op.operation.get(field_name)
+            if isinstance(text, str) and text.strip():
+                texts.append((
+                    f"/paths/{escaped}/{op.method}/{field_name}",
+                    f"{op.method.upper()} {op.path} {field_name}",
+                    text.strip(),
+                ))
+    return texts
+
+
+def review_descriptions(
+    messages_api: MessageCreator,
+    *,
+    spec: LoadedSpec,
+    standards: Standards,
+    run: AgentRun,
+) -> Suggestion | None:
+    """One AI call that checks every summary and description reads clearly.
+
+    Returns a suggestion with the rewrites, or None when there is nothing to review,
+    the call budget is spent, or the AI says everything is fine. Missing
+    descriptions are not reviewed here: REC-002 already flags those.
+    """
+    texts = _texts_to_review(spec)
+    if not texts or run.calls_remaining == 0:
+        return None
+    # A stand-in finding, so the rewrites go through the same gate and approval
+    # loop as every other fix.
+    finding = Finding(
+        rule_id="REC-002",
+        severity=Severity.SUGGESTION,
+        location="$.paths",
+        snippet="AI review of summaries and descriptions",
+        clause_id="REC-002",
+        rule_type=RuleType.LLM,
+    )
+    clause_text, clause_url = _clause_for(standards, finding.clause_id)
+    content = prompts.review_message(
+        texts=texts, clause_id=finding.clause_id,
+        clause_text=clause_text, clause_url=clause_url,
+    )
+    try:
+        suggestion = _ask_for_patch(
+            messages_api, spec=spec, finding=finding, standards=standards, run=run,
+            content=content,
+        )
+    except BudgetExhausted:
+        return None
+    if suggestion.stage == "empty_patch":
+        return None  # the AI found nothing to improve
+    return suggestion
 
 
 def build_messages_api() -> MessageCreator:

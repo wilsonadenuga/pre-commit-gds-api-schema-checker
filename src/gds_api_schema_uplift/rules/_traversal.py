@@ -1,12 +1,7 @@
-"""Spec traversal helpers shared by every rule.
+"""Shared helpers for walking an OpenAPI spec.
 
-Rules must not hand-roll traversal or hand-build JSONPath strings. Findings from
-different rules are compared, deduplicated and rendered together, so `location` has
-to be produced one way — and `location` is what a Phase 3 patch targets.
-
-Every iterator here is tolerant of missing or wrongly-typed nodes: a spec that is
-structurally odd should yield fewer findings, never raise. Schema-level validity is
-the version gate's job, not each rule's.
+All rules use these, so every finding's location is written the same way. They
+skip missing or broken parts of the spec instead of crashing.
 """
 
 from __future__ import annotations
@@ -16,8 +11,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
-#: Keys under a Path Item that are operations. Anything else there (`parameters`,
-#: `summary`, `$ref`, ...) is not.
+#: The HTTP methods that can appear under a path.
 HTTP_METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 
 _IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -35,10 +29,7 @@ def _seg(key: str | int) -> str:
 
 
 def jp(*parts: str | int) -> str:
-    """Build a JSONPath from path segments.
-
-    Identifier-safe keys use dot notation and everything else uses quoted brackets,
-    so paths, media types and status codes render readably::
+    """Build a location string from its parts::
 
         jp("paths", "/v1/users", "get", "responses", "200")
         -> "$.paths['/v1/users'].get.responses['200']"
@@ -52,11 +43,7 @@ def child(location: str, *parts: str | int) -> str:
 
 
 def snippet(value: Any, limit: int = 120) -> str:
-    """Render a short, single-line excerpt of a spec node for the report.
-
-    Mappings and sequences are summarised by shape rather than dumped, because a
-    snippet is meant to orient the reader, not reproduce the document.
-    """
+    """A short, one-line version of a value for the report."""
     if isinstance(value, dict):
         keys = ", ".join(str(k) for k in list(value)[:6])
         more = ", ..." if len(value) > 6 else ""
@@ -243,12 +230,10 @@ def walk_schema(
     name: str | None = None,
     _seen: set[int] | None = None,
 ) -> Iterator[SchemaRef]:
-    """Recursively yield a schema and its subschemas.
+    """Yield a schema and every schema nested inside it.
 
-    Descends `properties`, `items`, `additionalProperties`, and the `allOf`/`anyOf`/
-    `oneOf` combinators. `$ref` nodes are yielded but not followed — resolving refs
-    would make a rule's finding count depend on how often a schema is reused, which
-    breaks the one-violation-one-finding property the fixtures rely on.
+    Goes into `properties`, `items`, `additionalProperties`, `allOf`, `anyOf` and
+    `oneOf`. `$ref` links are not followed, so a shared schema is only reported once.
     """
     if not isinstance(schema, dict):
         return

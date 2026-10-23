@@ -160,3 +160,35 @@ def finding_message(
         f"```yaml\n{spec_excerpt}\n```\n\n"
         f"Propose the smallest RFC 6902 patch that resolves this finding."
     )
+
+
+def review_message(
+    *,
+    texts: list[tuple[str, str, str]],
+    clause_id: str,
+    clause_text: str,
+    clause_url: str,
+) -> str:
+    """The user message for the AI review of summaries and descriptions.
+
+    `texts` is a list of `(json_pointer, label, text)`, e.g.
+    `("/paths/~1users/get/description", "GET /users description", "Returns...")`.
+    """
+    listing = "\n".join(
+        f"- pointer: {pointer}\n  {label}: {text}" for pointer, label, text in texts
+    )
+    return (
+        f"REVIEW\n"
+        f"Check that each summary and description below is clear, plain English, "
+        f"free of jargon, and explains what the operation does. Descriptions should "
+        f"also say when to use the operation. For each one that falls short, add a "
+        f"`replace` op at its pointer with a better version. Leave good ones alone. "
+        f"If they are all fine, call propose_patch with an empty ops array and the "
+        f"rationale \"All clear.\"\n\n"
+        f"{listing}\n\n"
+        f"ANCHORING CLAUSE\n"
+        f"clause id: {clause_id}\n"
+        f"source: {clause_url}\n"
+        f"clause text:\n{clause_text or '(no clause text available)'}"
+    )
+

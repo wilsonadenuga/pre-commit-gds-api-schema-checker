@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "anthropic/claude-sonnet-4.6"
 
 
 @dataclass

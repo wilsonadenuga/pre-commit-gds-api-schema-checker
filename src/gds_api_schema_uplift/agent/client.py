@@ -11,6 +11,7 @@ package runs without a network call or an API key.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -33,7 +34,15 @@ from .tools import (
 #: PRD s9.4 names Sonnet as the primary agent model: fast enough for a live demo and
 #: more than capable of a JSON Patch plus a rationale. Opus is capability we do not
 #: need at latency a 3-minute demo cannot afford.
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "anthropic/claude-sonnet-4.6"
+
+#: OpenRouter's Anthropic-compatible Messages API. The SDK appends `/v1/messages`.
+OPENROUTER_BASE_URL = "https://openrouter.ai/api"
+
+#: OpenRouter serves Claude from several providers (Anthropic, Bedrock, Vertex, Azure)
+#: and only guarantees Anthropic-compatible behaviour on Anthropic's own, so pin to it
+#: and fail rather than fall back to a provider with different tool-use quirks.
+OPENROUTER_PROVIDER: dict[str, Any] = {"order": ["anthropic"], "allow_fallbacks": False}
 
 #: A patch proposal is a short, well-scoped task with the clause already supplied, so
 #: low effort is the right default and it protects the demo against latency. Raise it
@@ -85,6 +94,8 @@ class AgentConfig:
             "model": self.model,
             "max_tokens": self.max_tokens,
             "output_config": {"effort": self.effort},
+            # `provider` is an OpenRouter-only body field with no SDK parameter.
+            "extra_body": {"provider": OPENROUTER_PROVIDER},
         }
         if self.thinking:
             # Adaptive thinking must be requested explicitly on this model family —
@@ -331,13 +342,17 @@ def propose_for_findings(
     return suggestions
 
 
-def build_messages_api(api_key: str | None = None) -> MessageCreator:
-    """Construct the real Anthropic messages API.
+def build_messages_api() -> MessageCreator:
+    """Construct the messages API, pointed at OpenRouter.
 
     Imported lazily so the package imports (and the deterministic pass runs) without
-    the SDK resolving credentials.
+    the SDK resolving credentials. The key is passed explicitly so the SDK never
+    falls back to an `ANTHROPIC_*` credential and sends it to OpenRouter.
     """
     import anthropic
 
-    client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
+    client = anthropic.Anthropic(base_url=OPENROUTER_BASE_URL, auth_token=api_key)
     return client.messages

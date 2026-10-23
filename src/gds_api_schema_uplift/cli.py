@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 # Load `.env` from the current working directory if it exists, so a
-# developer can put `ANTHROPIC_API_KEY` or `GDS_UPLIFT_*` values in
+# developer can put `OPENROUTER_API_KEY` or `GDS_UPLIFT_*` values in
 # `.env` (per `.env.example`) and have them picked up automatically —
 # no `set -a; source .env; set +a` dance. Existing shell values win
 # over `.env` values (dotenv's default `override=False`), so a
@@ -29,7 +29,7 @@ from .agent.client import DEFAULT_MODEL
 from .agent.prompts import build_system_blocks, cache_warning
 from .contracts import Suggestion
 from .loader import SpecLoadError, SpecVersionRejected, load_spec, version_gate
-from .report import render_json, render_text
+from .report import plural, render_json, render_text
 from .rules import REGISTRY, run_deterministic_pass
 from .standards import StandardsError, default_standards_path, load_standards
 from .telemetry import TelemetryContext, build_telemetry
@@ -125,7 +125,7 @@ def check(
     ] = None,
     model: Annotated[
         str,
-        typer.Option("--model", help="Anthropic model id for the agent pass."),
+        typer.Option("--model", help="OpenRouter model id for the agent pass."),
     ] = DEFAULT_MODEL,
     effort: Annotated[
         Effort,
@@ -229,10 +229,8 @@ def check(
             console=console,
             include_suggestions=not interactive,
         )
-        if agent_run is not None:
-            agent_run.cost.render(console)
-
         exit_code = EXIT_FINDINGS if findings else EXIT_OK
+        remaining = len(findings)
         if interactive:
             from .approval import ApprovalSession
 
@@ -247,9 +245,34 @@ def check(
                 with tele.span("rules.recheck_after_approval"):
                     fresh_findings = run_deterministic_pass(session.spec)
                 exit_code = EXIT_FINDINGS if fresh_findings else EXIT_OK
+                remaining = len(fresh_findings)
+
+        if agent_run is not None:
+            agent_run.cost.render(console)
+        next_step = _next_step(
+            remaining=remaining,
+            llm_ran=agent_run is not None,
+            offered=any(s.offered for s in suggestions),
+            interactive=interactive,
+        )
+        if next_step:
+            console.print(f"[bold]Next:[/bold] {next_step}")
 
         tele.event("RUN", "COMPLETED", "REPORT", exit_code=exit_code)
         raise typer.Exit(exit_code)
+
+
+def _next_step(*, remaining: int, llm_ran: bool, offered: bool, interactive: bool) -> str:
+    """One suggested next command, so the run never ends on a dead end."""
+    if remaining == 0:
+        return ""
+    if interactive:
+        return f"{plural(remaining, 'finding')} left. Re-run to check them."
+    if offered:
+        return "run without --no-apply to review these fixes one by one."
+    if not llm_ran:
+        return "run without --no-llm (with OPENROUTER_API_KEY set) to get AI fixes."
+    return "apply the fixes above by hand, then re-run."
 
 
 def _should_run_approval_loop(
@@ -300,9 +323,8 @@ def _run_agent(
         messages_api = build_messages_api()
     except Exception as exc:  # noqa: BLE001 - SDK raises a family of auth/config errors
         err.print(
-            f"[yellow]Skipping the AI pass:[/yellow] could not construct the "
-            f"Anthropic client ({type(exc).__name__}: {exc}). Deterministic findings "
-            f"are unaffected."
+            f"[yellow]AI fixes skipped:[/yellow] {exc}. The rule findings below "
+            f"still apply."
         )
         return None, []
 
@@ -316,15 +338,15 @@ def _run_agent(
         )
     except Exception as exc:  # noqa: BLE001 - network/API errors must not fail the run
         err.print(
-            f"[yellow]AI pass failed:[/yellow] {type(exc).__name__}: {exc}. "
-            f"Deterministic findings are unaffected."
+            f"[yellow]AI fixes failed:[/yellow] {exc}. The rule findings below "
+            f"still apply."
         )
         return run, []
 
     if run.patches_dropped:
         err.print(
-            f"[yellow]Note:[/yellow] {run.patches_dropped} proposed patch(es) were "
-            f"dropped before display — they failed validation or were malformed."
+            f"[dim]{plural(run.patches_dropped, 'AI fix', 'AI fixes')} discarded because "
+            f"they would have broken the spec.[/dim]"
         )
 
     # Ship the aggregate LLM cost as an OTel metric — PLAN s6 requires cost

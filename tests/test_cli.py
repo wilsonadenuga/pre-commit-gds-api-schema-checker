@@ -29,7 +29,7 @@ runner = CliRunner()
 def test_clean_spec_exits_zero():
     result = runner.invoke(app, [str(GOOD_SPEC)])
     assert result.exit_code == EXIT_OK, result.output
-    assert "No findings" in result.output
+    assert "No problems found" in result.output
 
 
 def test_findings_exit_one():
@@ -111,10 +111,10 @@ def test_text_report_summarises_counts_by_severity():
     """v0.2 ruleset complete on broken.yaml: 3 errors (GDS-001, NCSC-001, NCSC-002),
     5 warnings (GDS-002..005 + NCSC-003), 3 suggestions (NCSC-004, REC-001, REC-002)."""
     result = runner.invoke(app, [str(BROKEN_SPEC)])
-    assert "11 finding(s)" in result.output
-    assert "3 error" in result.output
-    assert "5 warning" in result.output
-    assert "3 suggestion" in result.output
+    assert "11 findings" in result.output
+    assert "3 errors" in result.output
+    assert "5 warnings" in result.output
+    assert "3 suggestions" in result.output
 
 
 def test_report_resolves_citations_now_the_corpus_is_authored():

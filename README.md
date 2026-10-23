@@ -26,7 +26,7 @@ make demo-good                   # run against examples/good.yaml
 `make setup` uses [uv](https://docs.astral.sh/uv/) when it is on the PATH and
 falls back to stdlib `venv` + `pip` when it is not.
 
-Copy `.env.example` to `.env` and fill in `ANTHROPIC_API_KEY` if you want the AI
+Copy `.env.example` to `.env` and fill in `OPENROUTER_API_KEY` if you want the AI
 suggestion pass to run. Without a key the tool degrades to deterministic-only
 with a note rather than failing.
 
@@ -42,7 +42,7 @@ gds-api-schema-uplift SPEC_PATH [OPTIONS]
   --no-apply                    Report-only mode: never prompt or write to
                                 disk. Implied by --format=json.
   --max-llm-calls INTEGER       Cap agent calls per run. [default: 5]
-  --model TEXT                  Anthropic model id. [default: claude-sonnet-4-6]
+  --model TEXT                  OpenRouter model id. [default: anthropic/claude-sonnet-4.6]
   --effort [low|medium|high|max]  Agent reasoning effort. [default: low]
   --standards PATH              Override the standards.yaml path.
 ```
@@ -71,7 +71,7 @@ a report.
 
 The agent pass runs by default and costs money. Set `GDS_UPLIFT_NO_LLM=1` (or
 pass `--no-llm`) to disable it — in CI, on shared runners, or anywhere a stray
-`ANTHROPIC_API_KEY` could turn a check into a bill. The test suite sets this
+`OPENROUTER_API_KEY` could turn a check into a bill. The test suite sets this
 automatically via `tests/conftest.py`, and a second guard makes constructing a
 real client fail loudly inside tests.
 
@@ -82,8 +82,9 @@ $0.05. Per-run total and cache hit ratio print at the end — a hit ratio of zer
 across a multi-finding run means caching has stopped working and costs ~10× more
 than it should.
 
-Credentials resolve the usual way — `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
-or an `ant auth login` profile.
+The agent calls Claude through OpenRouter's Anthropic-compatible endpoint
+(`https://openrouter.ai/api`), using the Anthropic SDK with `OPENROUTER_API_KEY`.
+Requests are pinned to the Anthropic provider with fallbacks disabled.
 
 ## What is covered
 

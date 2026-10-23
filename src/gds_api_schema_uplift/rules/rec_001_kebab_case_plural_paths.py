@@ -230,7 +230,7 @@ def check(spec: LoadedSpec) -> list[Finding]:
                 severity=Severity.SUGGESTION,
                 # Point at the path item — the key a fix has to rename.
                 location=jp("paths", path),
-                snippet=snippet(reason),
+                snippet=snippet(reason, limit=200),
                 clause_id="REC-001",
                 rule_type=RuleType.DETERMINISTIC,
             )

@@ -58,7 +58,7 @@
       "rule_id": "NCSC-001",
       "rule_type": "deterministic",
       "severity": "error",
-      "snippet": "'basicAuth' is HTTP basic authentication \u2014 banned by NCSC \u00a72; use OAuth 2.0 or OpenID Connect instead"
+      "snippet": "'basicAuth' is HTTP basic authentication, which NCSC advises against; use OAuth 2.0 or OpenID Connect instead"
     },
     {
       "clause_id": "NCSC-002",
@@ -68,7 +68,7 @@
       "rule_id": "NCSC-002",
       "rule_type": "deterministic",
       "severity": "error",
-      "snippet": "security: [] on GET /getUserList \u2014 explicit opt-out"
+      "snippet": "GET /getUserList switches authentication off with security: []"
     },
     {
       "clause_id": "NCSC-003",
@@ -98,7 +98,7 @@
       "rule_id": "REC-001",
       "rule_type": "deterministic",
       "severity": "suggestion",
-      "snippet": "path is not kebab-case (contains uppercase or underscore); verb in path \u2014 put verbs in the HTTP method, not the URI: /g\u2026"
+      "snippet": "path is not kebab-case (contains uppercase or underscore); verb in path \u2014 put verbs in the HTTP method, not the URI: /getUserList"
     },
     {
       "clause_id": "REC-002",

@@ -344,7 +344,7 @@ def test_quit_before_any_accept_writes_nothing(tmp_path):
     assert outcome.approved == 0
     assert spec_path.read_text() == original
     assert not _backup_path(spec_path).exists()
-    assert "quit early" in buffer.getvalue()
+    assert "stopped early" in buffer.getvalue()
 
 
 def test_quit_after_accept_leaves_the_accepted_write_in_place(tmp_path):
@@ -585,12 +585,59 @@ def test_a_patch_invalidated_by_an_earlier_accept_is_skipped(tmp_path):
     assert outcome.approved == 1
     assert outcome.approved_rule_ids == ["GDS-001"]
     assert outcome.skipped_invalid == ["GDS-002"]
-    assert "Cannot apply GDS-002" in buffer.getvalue()
+    assert "Skipped GDS-002" in buffer.getvalue()
     # File must be in the state after the first accept, not corrupted. Re-parse
     # to check the actual `info` mapping rather than grepping the whole text —
     # `description` appears in file-level comments too.
     reparsed = load_spec(spec_path)
     assert "description" not in reparsed.data["info"]
+
+
+def test_a_path_rename_is_offered_after_patches_inside_that_path(tmp_path):
+    """The live-demo bug: GDS-003 renamed a path and GDS-004 then could not apply."""
+    rename = _make_suggestion(
+        rule_id="GDS-003",
+        patch=Patch(
+            ops=(PatchOp(op="move", from_="/paths/~1v1~1users", path="/paths/~1v2~1users"),),
+            rationale="Version the path.",
+            clause_quote="Version your API.",
+        ),
+    )
+    inside = _make_suggestion(
+        rule_id="GDS-004",
+        patch=_make_patch(path="/paths/~1v1~1users/get/summary", value="Users"),
+    )
+    session, _, spec_path = _session(tmp_path, _canned(ACCEPT, ACCEPT))
+
+    outcome = session.run([rename, inside])
+
+    assert outcome.approved_rule_ids == ["GDS-004", "GDS-003"]
+    assert outcome.skipped_invalid == []
+    assert load_spec(spec_path).data["paths"]["/v2/users"]["get"]["summary"] == "Users"
+
+
+API_WARNING = "This changes the API contract"
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/paths/~1v1~1users/get/operationId", "/components/schemas/User/properties/description"],
+)
+def test_a_patch_that_changes_the_api_warns_before_the_prompt(tmp_path, path):
+    suggestion = _make_suggestion(patch=_make_patch(op="add", path=path, value="x"))
+    session, buffer, _ = _session(tmp_path, _canned(REJECT))
+
+    session.run([suggestion])
+
+    assert API_WARNING in buffer.getvalue()
+
+
+def test_a_documentation_only_patch_does_not_warn(tmp_path):
+    session, buffer, _ = _session(tmp_path, _canned(REJECT))
+
+    session.run([_make_suggestion()])  # replaces /info/title
+
+    assert API_WARNING not in buffer.getvalue()
 
 
 # --- outcome accounting -----------------------------------------------------

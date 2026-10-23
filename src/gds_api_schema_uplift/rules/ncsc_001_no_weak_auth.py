@@ -53,13 +53,13 @@ def _describe_weakness(name: object, scheme: dict[str, Any]) -> str:
     scheme_type = scheme.get("type")
     if scheme_type == "http" and str(scheme.get("scheme", "")).lower() == "basic":
         return (
-            f"'{name}' is HTTP basic authentication — banned by NCSC §2; "
+            f"'{name}' is HTTP basic authentication, which NCSC advises against; "
             f"use OAuth 2.0 or OpenID Connect instead"
         )
     if scheme_type == "apiKey":
         location = scheme.get("in", "?")
         return (
-            f"'{name}' is a bare apiKey (in={location}) — banned by NCSC §2; "
+            f"'{name}' is a plain API key (in {location}), which NCSC advises against; "
             f"use OAuth 2.0 or OpenID Connect instead"
         )
     return f"'{name}' uses a weak authentication scheme"  # pragma: no cover

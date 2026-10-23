@@ -26,6 +26,7 @@ Tests pass an `input_fn` callable in place of the terminal.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,8 +38,23 @@ from rich.panel import Panel
 from .contracts import Authority, Suggestion
 from .loader import LoadedSpec, load_spec
 from .patching import patched_text, validate_patch
+from .report import plural, render_suggestion
 from .standards import Standards, StandardsError
 from .telemetry import TelemetryContext
+
+#: A JSON Pointer to a whole path item, e.g. `/paths/~1users`. A patch that moves,
+#: adds or removes one renames a URL, which breaks every other patch pointing into it.
+_PATH_ITEM = re.compile(r"/paths/[^/]+")
+
+
+def _renames_a_path(suggestion: Suggestion) -> bool:
+    assert suggestion.patch is not None
+    return any(
+        _PATH_ITEM.fullmatch(pointer)
+        for op in suggestion.patch.ops
+        for pointer in (op.path, op.from_)
+        if pointer
+    )
 
 #: Actions accepted at the approval prompt. `e` is the Phase 4 cuttable per
 #: PLAN — omitted from the initial ship, its slot preserved by rejecting the
@@ -148,13 +164,16 @@ class ApprovalSession:
         patch (see the invariant list above).
         """
         offered = [s for s in suggestions if s.offered and s.patch is not None]
+        # Offer URL renames last so they cannot invalidate patches inside the path.
+        # `sort` is stable, so rule-id order is kept within each group.
+        offered.sort(key=_renames_a_path)
         if not offered:
             return self.outcome
 
         self.console.print()
         self.console.print(
-            f"[bold]Reviewing {len(offered)} AI-proposed patch(es).[/bold]  "
-            "[dim]No changes will be written without your approval.[/dim]"
+            f"[bold]{plural(len(offered), 'AI fix', 'AI fixes')} to review.[/bold]  "
+            "[dim]Nothing is written to your file unless you press y.[/dim]"
         )
 
         for index, suggestion in enumerate(offered, start=1):
@@ -174,7 +193,7 @@ class ApprovalSession:
         loop; WHY re-prompts after showing the clause; unknown keys re-prompt
         without doing anything else.
         """
-        self._render_suggestion_panel(suggestion, index, total)
+        render_suggestion(suggestion, self.console, title=f"AI fix {index} of {total}")
 
         while True:
             raw = self._prompt()
@@ -185,7 +204,7 @@ class ApprovalSession:
                 return ACCEPT
             if key == REJECT:
                 self.outcome.rejected_rule_ids.append(suggestion.finding.rule_id)
-                self.console.print("[dim]Skipped.[/dim]")
+                self.console.print("[dim]Left unchanged.[/dim]")
                 self._emit("REJECTS", suggestion)
                 return REJECT
             if key == QUIT:
@@ -197,9 +216,8 @@ class ApprovalSession:
                 continue  # re-prompt without incrementing anything
             if key == EDIT:
                 self.console.print(
-                    "[dim]Edit mode is not available in this build "
-                    "(Phase 4 cuttable per PLAN). Use `y` to accept, `n` to skip, "
-                    "or `q` to leave the rest untouched.[/dim]"
+                    "[dim]Editing a fix is not available yet. Press y to apply it, "
+                    "n to leave it, or q to stop reviewing.[/dim]"
                 )
                 continue
 
@@ -236,8 +254,8 @@ class ApprovalSession:
         if not result.ok:
             self.outcome.skipped_invalid.append(rule_id)
             self.console.print(
-                f"[yellow]Cannot apply {rule_id}:[/yellow] earlier edits invalidated "
-                f"this patch ([dim]{result.stage}[/dim]: {result.error}). Skipping."
+                f"[yellow]Skipped {rule_id}:[/yellow] an earlier fix changed this part "
+                f"of the spec, so this one no longer fits. Re-run to get a fresh fix."
             )
             self._emit(
                 "SKIPS_INVALID", suggestion,
@@ -257,7 +275,7 @@ class ApprovalSession:
         # caller's spec" invariant intact for every op in the loop.
         self.spec = load_spec(self.spec.path)
         self.outcome.approved_rule_ids.append(rule_id)
-        self.console.print(f"[green]Applied.[/green] {self.spec.path} updated.")
+        self.console.print(f"[green]✔ Applied to {self.spec.path}[/green]")
         self._emit("APPROVES", suggestion)
 
     def _write_backup(self) -> None:
@@ -276,35 +294,8 @@ class ApprovalSession:
         backup.write_bytes(original.read_bytes())
         self._backup_written = True
         self.outcome.backup_path = backup
-        self.console.print(f"[dim]Backup written: {backup}[/dim]")
 
     # -- rendering ----------------------------------------------------------
-
-    def _render_suggestion_panel(
-        self, suggestion: Suggestion, index: int, total: int
-    ) -> None:
-        """Render one AI suggestion as a Rich Panel, matching report.py style."""
-        patch = suggestion.patch
-        assert patch is not None
-        finding = suggestion.finding
-
-        lines = [f"[bold]{finding.rule_id}[/bold]  {finding.location}"]
-        if patch.clause_quote:
-            lines.append(f'\n[dim]clause:[/dim] "{patch.clause_quote}"')
-        else:
-            lines.append("\n[red]clause: (none — suggestion is uncited)[/red]")
-        lines.append(f"\n[dim]why:[/dim] {patch.rationale}")
-        if suggestion.diff:
-            lines.append(f"\n\n{suggestion.diff}")
-
-        self.console.print()
-        self.console.print(
-            Panel(
-                "".join(lines),
-                title=f"AI suggestion  [dim]({index}/{total})[/dim]",
-                border_style="cyan",
-            )
-        )
 
     def _render_full_clause(self, suggestion: Suggestion) -> None:
         """Show the full standards clause text on `w`hy.
@@ -330,7 +321,7 @@ class ApprovalSession:
 
         authority_tag = ""
         if clause.authority is Authority.RECOMMENDATION:
-            authority_tag = " [dim](recommendation, not GDS-mandated)[/dim]"
+            authority_tag = " [cyan](recommendation only — not a GDS requirement)[/cyan]"
 
         self.console.print()
         self.console.print(
@@ -345,25 +336,22 @@ class ApprovalSession:
     def _render_summary(self) -> None:
         """One-line summary of what happened. Silent when nothing to say."""
         o = self.outcome
-        if o.approved == 0 and o.rejected == 0 and not o.quit_early:
+        if o.approved == 0 and o.rejected == 0 and not o.skipped_invalid and not o.quit_early:
             return
 
         parts = []
         if o.approved:
             parts.append(f"[green]{o.approved} applied[/green]")
         if o.rejected:
-            parts.append(f"[dim]{o.rejected} skipped[/dim]")
+            parts.append(f"[dim]{o.rejected} left unchanged[/dim]")
         if o.skipped_invalid:
             parts.append(
-                f"[yellow]{len(o.skipped_invalid)} could not apply[/yellow]"
+                f"[yellow]{len(o.skipped_invalid)} no longer fit[/yellow]"
             )
         if o.quit_early:
-            parts.append("[dim]quit early[/dim]")
+            parts.append("[dim]stopped early[/dim]")
 
         self.console.print()
-        self.console.print("Approval summary: " + ", ".join(parts) + ".")
+        self.console.print("[bold]Review done:[/bold] " + ", ".join(parts) + ".")
         if o.backup_path is not None:
-            self.console.print(
-                f"[dim]Original preserved at {o.backup_path}. "
-                f"Re-run to see the updated compliance state.[/dim]"
-            )
+            self.console.print(f"[dim]Original saved as {o.backup_path}[/dim]")

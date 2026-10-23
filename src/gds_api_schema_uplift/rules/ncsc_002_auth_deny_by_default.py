@@ -127,7 +127,7 @@ def check(spec: LoadedSpec) -> list[Finding]:
                     severity=Severity.ERROR,
                     location=child(op.location, "security"),
                     snippet=snippet(
-                        f"security: [] on {op.label} — explicit opt-out"
+                        f"{op.label} switches authentication off with security: []"
                     ),
                     clause_id="NCSC-002",
                     rule_type=RuleType.DETERMINISTIC,
@@ -148,8 +148,8 @@ def check(spec: LoadedSpec) -> list[Finding]:
                 severity=Severity.ERROR,
                 location=op.location,
                 snippet=snippet(
-                    f"no security requirement on {op.label}: "
-                    "root and operation-level security both missing"
+                    f"{op.label} has no authentication: no security is declared "
+                    "for it or for the whole API"
                 ),
                 clause_id="NCSC-002",
                 rule_type=RuleType.DETERMINISTIC,

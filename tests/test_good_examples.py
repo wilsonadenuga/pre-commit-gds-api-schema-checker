@@ -23,11 +23,7 @@ from ruamel.yaml import YAML
 
 from gds_api_schema_uplift.contracts import Finding, RuleType, Severity
 from gds_api_schema_uplift.loader import load_spec
-from gds_api_schema_uplift.report import (
-    render_good_examples,
-    render_json,
-    render_text,
-)
+from gds_api_schema_uplift.report import render_json, render_text
 from gds_api_schema_uplift.rules import REGISTRY, run_deterministic_pass
 
 
@@ -133,70 +129,39 @@ def test_json_report_has_empty_good_examples_when_clean():
 # --- the data reaches the text output --------------------------------------
 
 
-def test_text_output_renders_one_panel_per_distinct_rule():
-    """`GDS-002` firing three times shows one "How to fix" panel, not three.
-
-    Rendering into a `Console(file=StringIO())` at an explicit width side-
-    steps terminal wrapping and lets us count panel titles by substring.
-    """
-    findings = run_deterministic_pass(load_spec(BROKEN_SPEC))
-    distinct = {f.rule_id for f in findings}
+def _render(findings) -> str:
     buffer = io.StringIO()
-    render_good_examples(findings, Console(file=buffer, width=200, force_terminal=False))
-    output = buffer.getvalue()
-    for rule_id in distinct:
-        assert f"How to fix — {rule_id}" in output, (
-            f"expected a `How to fix — {rule_id}` panel; got:\n{output}"
-        )
-    # No panel for a rule that didn't fire.
-    for rule_id in REGISTRY:
-        if rule_id not in distinct:
-            assert f"How to fix — {rule_id}" not in output
-
-
-def test_text_output_shows_the_rule_summary_alongside_the_yaml():
-    """The panel body carries the rule's summary as context above the code.
-
-    A stakeholder scanning the report should get "what to aim for" in prose
-    before the YAML block, so the panel is legible without opening the code.
-    """
-    findings = [
-        Finding(
-            rule_id="GDS-001",
-            severity=Severity.ERROR,
-            location="$.servers[0].url",
-            snippet="s",
-            clause_id="GDS-001",
-            rule_type=RuleType.DETERMINISTIC,
-        )
-    ]
-    buffer = io.StringIO()
-    render_good_examples(findings, Console(file=buffer, width=200, force_terminal=False))
-    output = buffer.getvalue()
-    assert REGISTRY["GDS-001"].summary in output
-
-
-def test_render_text_includes_good_examples_by_default(tmp_path):
-    """The findings table and the fix panels ship together — no flag needed.
-
-    Regression guard: someone gating this behind `--show-examples` would
-    silently defeat the "reports are self-sufficient" premise. This test
-    fails if that ever happens.
-    """
     spec = load_spec(BROKEN_SPEC)
-    findings = run_deterministic_pass(spec)
-    buffer = io.StringIO()
-    render_text(spec, findings, standards=None, console=Console(file=buffer, width=200))
-    assert "How to fix — GDS-001" in buffer.getvalue()
+    render_text(spec, findings, console=Console(file=buffer, width=200, force_terminal=False))
+    return buffer.getvalue()
 
 
-def test_render_text_is_silent_about_examples_on_a_clean_spec():
-    """No findings → no panels. A dedicated pass to make sure of it.
+def test_text_output_shows_one_fix_per_distinct_rule():
+    """A rule firing several times shows its fix example once, not once per finding."""
+    findings = run_deterministic_pass(load_spec(BROKEN_SPEC))
+    output = _render(findings)
+    assert output.count("Fix:") == len({f.rule_id for f in findings})
 
-    A clean run should read `No findings.` and stop; adding a stray "How to
-    fix" section afterwards would confuse a reviewer scanning for problems.
-    """
+
+def test_text_output_shows_the_rule_summary_alongside_the_fix():
+    """The block carries the rule's summary in prose, so it reads without the YAML."""
+    finding = Finding(
+        rule_id="GDS-001",
+        severity=Severity.ERROR,
+        location="$.servers[0].url",
+        snippet="s",
+        clause_id="GDS-001",
+        rule_type=RuleType.DETERMINISTIC,
+    )
+    output = _render([finding])
+    assert REGISTRY["GDS-001"].summary in output
+    assert "Fix:" in output
+
+
+def test_render_text_is_silent_about_fixes_on_a_clean_spec():
+    """No findings → no fix examples, just the all-clear."""
     spec = load_spec(GOOD_SPEC)
     buffer = io.StringIO()
     render_text(spec, [], standards=None, console=Console(file=buffer, width=200))
-    assert "How to fix" not in buffer.getvalue()
+    assert "Fix:" not in buffer.getvalue()
+    assert "No problems found" in buffer.getvalue()

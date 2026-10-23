@@ -19,7 +19,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rich.console import Console
-from rich.table import Table
 
 # Prompt-caching multipliers, applied to a model's *input* rate.
 #
@@ -106,6 +105,10 @@ PRICING: dict[str, ModelPricing] = {
 }
 
 
+#: Vendor namespace OpenRouter puts on Anthropic model ids.
+OPENROUTER_PREFIX = "anthropic/"
+
+
 def pricing_for(model_id: str) -> ModelPricing:
     """Look up pricing, resolving dated suffixes.
 
@@ -119,10 +122,18 @@ def pricing_for(model_id: str) -> ModelPricing:
     billed well above the base rate), so silently resolving `...-fast` to its
     base entry would under-report. Anything unrecognised raises instead.
 
+    OpenRouter's spelling of the same model — `anthropic/claude-sonnet-4.6` — is
+    mapped back to the Anthropic id first. Its Anthropic-provider rates match the
+    table, so the mapping is a rename, not a reprice. Other namespaces and
+    OpenRouter's `~anthropic/...-latest` aliases are left alone and raise: an alias
+    can move to a differently priced model underneath us.
+
     Raises:
         UnknownModelError: if no entry can be resolved.
     """
     candidate = model_id
+    if candidate.startswith(OPENROUTER_PREFIX):
+        candidate = candidate.removeprefix(OPENROUTER_PREFIX).replace(".", "-")
     while candidate:
         if candidate in PRICING:
             return PRICING[candidate]
@@ -317,53 +328,25 @@ class CostTracker:
         return lines
 
     def render(self, console: Console | None = None) -> None:
-        """Print the per-run cost summary."""
+        """Print the per-run cost as one line; `summary_lines` has the detail."""
         console = console or Console()
 
         if not self._calls:
-            # An empty table reads as a rendering bug. Say what happened instead.
             console.print("[dim]No LLM calls this run — nothing to bill.[/dim]")
             return
-
-        table = Table(title="LLM cost this run", header_style="bold")
-        table.add_column("#", justify="right", no_wrap=True)
-        table.add_column("Model", no_wrap=True)
-        table.add_column("Input", justify="right")
-        table.add_column("Cache w", justify="right")
-        table.add_column("Cache r", justify="right")
-        table.add_column("Output", justify="right")
-        table.add_column("Cost", justify="right")
-
-        for index, call in enumerate(self._calls, start=1):
-            table.add_row(
-                str(index),
-                call.model,
-                f"{call.input_tokens:,}",
-                f"{call.cache_creation_input_tokens:,}",
-                f"{call.cache_read_input_tokens:,}",
-                f"{call.output_tokens:,}",
-                format_usd(call.cost_usd),
-            )
-        console.print(table)
-
-        console.print(
-            f"[bold]Total: {format_usd(self.total_usd)}[/bold] "
-            f"across {len(self._calls)} call(s), {self.total_tokens:,} token(s)."
-        )
 
         # A run whose cache never hits is a cost bug worth seeing, so the ratio is
         # stated on every run rather than only when it looks interesting.
         ratio = self.cache_hit_ratio
-        style = "green" if ratio > 0 else "yellow"
-        note = "" if ratio > 0 else " — nothing was served from cache this run"
-        console.print(
-            f"Prompt cache hit ratio: [{style}]{ratio:.1%}[/{style}] "
-            f"of {self.total_input_tokens:,} input token(s){note}."
+        cached = (
+            f"[green]{ratio:.0%} cached[/green]" if ratio > 0
+            else "[yellow]0.0% cached — nothing was served from cache this run[/yellow]"
         )
-
-        if len(self.by_model()) > 1:
-            for model, cost in sorted(self.by_model().items()):
-                console.print(f"  [dim]{model}[/dim]  {format_usd(cost)}")
+        calls = "1 call" if len(self._calls) == 1 else f"{len(self._calls)} calls"
+        console.print(
+            f"[dim]AI cost:[/dim] [bold]{format_usd(self.total_usd)}[/bold] "
+            f"[dim]·[/dim] {calls} [dim]·[/dim] {cached}"
+        )
 
     def as_metrics(self) -> dict[str, float | int]:
         """Flat metric name -> value, for the OTel phase.

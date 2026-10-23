@@ -119,6 +119,24 @@ def test_unknown_model_error_is_a_key_error():
     assert issubclass(UnknownModelError, KeyError)
 
 
+def test_openrouter_slug_resolves_to_the_anthropic_entry():
+    assert pricing_for("anthropic/claude-sonnet-4.6") is PRICING["claude-sonnet-4-6"]
+
+
+def test_openrouter_and_anthropic_spellings_price_identically():
+    routed = CallUsage(model="anthropic/claude-sonnet-4.6", input_tokens=1_000_000)
+    direct = CallUsage(model="claude-sonnet-4-6", input_tokens=1_000_000)
+    assert routed.cost_usd == direct.cost_usd
+
+
+@pytest.mark.parametrize(
+    "model_id", ["~anthropic/claude-sonnet-latest", "openai/gpt-4", "anthropic/gpt-4"]
+)
+def test_openrouter_aliases_and_foreign_namespaces_are_not_priced(model_id):
+    with pytest.raises(UnknownModelError):
+        pricing_for(model_id)
+
+
 def test_non_numeric_suffix_is_not_silently_resolved():
     """A `-fast` SKU is billed above base; resolving it down would under-report."""
     with pytest.raises(UnknownModelError):
@@ -387,13 +405,14 @@ def test_render_shows_the_total():
     assert "$0.3600" in output
 
 
-def test_render_shows_per_call_rows_and_the_cache_hit_ratio():
-    console = Console(file=io.StringIO(), width=100)
-    _multi_model_tracker().render(console)
+def test_render_is_one_line_with_calls_and_the_cache_hit_ratio():
+    tracker = _multi_model_tracker()
+    console = Console(file=io.StringIO(), width=200)
+    tracker.render(console)
     output = console.file.getvalue()
-    assert output.count("claude-haiku-4-5") >= 2  # one row per haiku call
-    assert "claude-opus-5" in output
-    assert "cache hit ratio" in output.lower()
+    assert len(output.strip().splitlines()) == 1
+    assert f"{len(tracker.calls)} calls" in output
+    assert "cached" in output
 
 
 def test_render_flags_a_run_where_the_cache_never_hit():

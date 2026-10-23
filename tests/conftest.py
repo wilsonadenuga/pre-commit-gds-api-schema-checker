@@ -1,7 +1,7 @@
 """Suite-wide safety rails.
 
 The agent pass runs by default in the CLI, so a developer or CI runner with
-`OPENROUTER_API_KEY` in the environment would otherwise make real, billable API calls
+AWS credentials in the environment would otherwise make real, billable API calls
 every time the CLI tests invoke the tool. That happened once during development: a
 full suite run took three minutes and spent real tokens instead of two seconds and
 none.

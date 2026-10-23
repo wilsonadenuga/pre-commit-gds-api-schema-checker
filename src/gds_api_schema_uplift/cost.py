@@ -105,8 +105,8 @@ PRICING: dict[str, ModelPricing] = {
 }
 
 
-#: Vendor namespace OpenRouter puts on Anthropic model ids.
-OPENROUTER_PREFIX = "anthropic/"
+#: Provider prefix Bedrock puts on Anthropic model ids.
+BEDROCK_PREFIX = "anthropic."
 
 
 def pricing_for(model_id: str) -> ModelPricing:
@@ -122,18 +122,15 @@ def pricing_for(model_id: str) -> ModelPricing:
     billed well above the base rate), so silently resolving `...-fast` to its
     base entry would under-report. Anything unrecognised raises instead.
 
-    OpenRouter's spelling of the same model — `anthropic/claude-sonnet-4.6` — is
-    mapped back to the Anthropic id first. Its Anthropic-provider rates match the
-    table, so the mapping is a rename, not a reprice. Other namespaces and
-    OpenRouter's `~anthropic/...-latest` aliases are left alone and raise: an alias
-    can move to a differently priced model underneath us.
+    Bedrock's spelling of the same model — `anthropic.claude-sonnet-5` — has the
+    prefix stripped first. Bedrock bills separately from Anthropic, so treat the
+    figures as an estimate; the table errs high, which is the safe direction.
 
     Raises:
         UnknownModelError: if no entry can be resolved.
     """
     candidate = model_id
-    if candidate.startswith(OPENROUTER_PREFIX):
-        candidate = candidate.removeprefix(OPENROUTER_PREFIX).replace(".", "-")
+    candidate = candidate.removeprefix(BEDROCK_PREFIX)
     while candidate:
         if candidate in PRICING:
             return PRICING[candidate]

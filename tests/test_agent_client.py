@@ -249,15 +249,11 @@ def test_thinking_can_be_turned_off(spec, gds_001, standards):
     assert "thinking" not in stub.requests[0]
 
 
-def test_request_pins_openrouter_to_the_anthropic_provider(spec, gds_001, standards):
+def test_request_uses_the_bedrock_model_id_by_default(spec, gds_001, standards):
     stub = StubMessages([propose_patch_response(HTTPS_FIX_OPS)])
     run_one(stub, spec, gds_001, standards)
 
-    request = stub.requests[0]
-    assert request["model"] == "anthropic/claude-sonnet-4.6"
-    assert request["extra_body"] == {
-        "provider": {"order": ["anthropic"], "allow_fallbacks": False}
-    }
+    assert stub.requests[0]["model"] == "anthropic.claude-sonnet-5"
 
 
 def test_tool_order_is_stable_across_calls(spec, gds_001, standards):

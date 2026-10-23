@@ -11,7 +11,6 @@ package runs without a network call or an API key.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -34,15 +33,9 @@ from .tools import (
 #: PRD s9.4 names Sonnet as the primary agent model: fast enough for a live demo and
 #: more than capable of a JSON Patch plus a rationale. Opus is capability we do not
 #: need at latency a 3-minute demo cannot afford.
-DEFAULT_MODEL = "anthropic/claude-sonnet-4.6"
-
-#: OpenRouter's Anthropic-compatible Messages API. The SDK appends `/v1/messages`.
-OPENROUTER_BASE_URL = "https://openrouter.ai/api"
-
-#: OpenRouter serves Claude from several providers (Anthropic, Bedrock, Vertex, Azure)
-#: and only guarantees Anthropic-compatible behaviour on Anthropic's own, so pin to it
-#: and fail rather than fall back to a provider with different tool-use quirks.
-OPENROUTER_PROVIDER: dict[str, Any] = {"order": ["anthropic"], "allow_fallbacks": False}
+#: Bedrock model ids carry an `anthropic.` prefix. Sonnet 5 is the Sonnet that
+#: Bedrock's Messages API endpoint serves.
+DEFAULT_MODEL = "anthropic.claude-sonnet-5"
 
 #: A patch proposal is a short, well-scoped task with the clause already supplied, so
 #: low effort is the right default and it protects the demo against latency. Raise it
@@ -94,8 +87,6 @@ class AgentConfig:
             "model": self.model,
             "max_tokens": self.max_tokens,
             "output_config": {"effort": self.effort},
-            # `provider` is an OpenRouter-only body field with no SDK parameter.
-            "extra_body": {"provider": OPENROUTER_PROVIDER},
         }
         if self.thinking:
             # Adaptive thinking must be requested explicitly on this model family —
@@ -343,16 +334,12 @@ def propose_for_findings(
 
 
 def build_messages_api() -> MessageCreator:
-    """Construct the messages API, pointed at OpenRouter.
+    """Construct the messages API on Amazon Bedrock.
 
     Imported lazily so the package imports (and the deterministic pass runs) without
-    the SDK resolving credentials. The key is passed explicitly so the SDK never
-    falls back to an `ANTHROPIC_*` credential and sends it to OpenRouter.
+    the SDK resolving credentials. Region and credentials come from the standard AWS
+    chain: `AWS_REGION`, `AWS_PROFILE` / SSO, or access-key environment variables.
     """
-    import anthropic
+    from anthropic import AnthropicBedrockMantle
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY is not set")
-    client = anthropic.Anthropic(base_url=OPENROUTER_BASE_URL, auth_token=api_key)
-    return client.messages
+    return AnthropicBedrockMantle().messages

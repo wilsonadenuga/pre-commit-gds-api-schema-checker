@@ -119,20 +119,12 @@ def test_unknown_model_error_is_a_key_error():
     assert issubclass(UnknownModelError, KeyError)
 
 
-def test_openrouter_slug_resolves_to_the_anthropic_entry():
-    assert pricing_for("anthropic/claude-sonnet-4.6") is PRICING["claude-sonnet-4-6"]
+def test_bedrock_id_resolves_to_the_anthropic_entry():
+    assert pricing_for("anthropic.claude-sonnet-5") is PRICING["claude-sonnet-5"]
 
 
-def test_openrouter_and_anthropic_spellings_price_identically():
-    routed = CallUsage(model="anthropic/claude-sonnet-4.6", input_tokens=1_000_000)
-    direct = CallUsage(model="claude-sonnet-4-6", input_tokens=1_000_000)
-    assert routed.cost_usd == direct.cost_usd
-
-
-@pytest.mark.parametrize(
-    "model_id", ["~anthropic/claude-sonnet-latest", "openai/gpt-4", "anthropic/gpt-4"]
-)
-def test_openrouter_aliases_and_foreign_namespaces_are_not_priced(model_id):
+@pytest.mark.parametrize("model_id", ["anthropic.gpt-4", "meta.llama3-70b"])
+def test_unknown_bedrock_ids_are_not_priced(model_id):
     with pytest.raises(UnknownModelError):
         pricing_for(model_id)
 

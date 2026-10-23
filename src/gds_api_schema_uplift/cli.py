@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 # Load `.env` from the current working directory if it exists, so a
-# developer can put `OPENROUTER_API_KEY` or `GDS_UPLIFT_*` values in
+# developer can put `AWS_*` or `GDS_UPLIFT_*` values in
 # `.env` (per `.env.example`) and have them picked up automatically —
 # no `set -a; source .env; set +a` dance. Existing shell values win
 # over `.env` values (dotenv's default `override=False`), so a
@@ -125,7 +125,7 @@ def check(
     ] = None,
     model: Annotated[
         str,
-        typer.Option("--model", help="OpenRouter model id for the agent pass."),
+        typer.Option("--model", help="Bedrock model id for the agent pass."),
     ] = DEFAULT_MODEL,
     effort: Annotated[
         Effort,
@@ -271,7 +271,7 @@ def _next_step(*, remaining: int, llm_ran: bool, offered: bool, interactive: boo
     if offered:
         return "run without --no-apply to review these fixes one by one."
     if not llm_ran:
-        return "run without --no-llm (with OPENROUTER_API_KEY set) to get AI fixes."
+        return "run without --no-llm (with AWS credentials set) to get AI fixes."
     return "apply the fixes above by hand, then re-run."
 
 
